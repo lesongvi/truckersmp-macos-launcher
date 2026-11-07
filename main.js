@@ -237,8 +237,6 @@ function runAutoDetect() {
   return r
 }
 
-}
-
 // ── Window ────────────────────────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -1416,6 +1414,7 @@ ipcMain.handle('shell:reveal', (_, p) => {
     return true
   }
   return false
+})
 
 
 // ── Known exit codes ─────────────────────────────────────────────────────────
@@ -1456,6 +1455,7 @@ ipcMain.handle('game:launch', async (_, s) => {
  
   }
 
+  try {
   // ── Wine binary check ─────────────────────────────────────────────────────
   // CrossOver 26 on Apple Silicon ships a single universal "wine" binary that
   // handles all Windows architectures internally — there is no separate wine64.
@@ -1484,15 +1484,18 @@ ipcMain.handle('game:launch', async (_, s) => {
   }
 
   // Soft warning: check ETS2 executable exists
-  const ets2exe = path.join(s.gameDir, 'bin', 'win_x64', 'eurotrucks2.exe')
-  if (!fs.existsSync(ets2exe)) {
-    sendLog('warn', `ETS2 executable not found at: ${ets2exe}`)
-    sendLog('warn', isStandalone
-      ? '  The game may not start. Make sure ETS2 is fully installed inside the bottle.'
-      : '  The game may not start. Make sure ETS2 is fully installed inside your CrossOver bottle.')
- 
+    const ets2exe = path.join(s.gameDir, 'bin', 'win_x64', 'eurotrucks2.exe')
+
+    if (!fs.existsSync(ets2exe)) {
+      sendLog('warn', `ETS2 executable not found at: ${ets2exe}`)
+      sendLog('warn', isStandalone
+        ? '  The game may not start. Make sure ETS2 is fully installed inside the bottle.'
+        : '  The game may not start. Make sure ETS2 is fully installed inside your CrossOver bottle.')
+    }
+
     sendLog('success', `Process started — PID ${gameProcess.pid}`)
-    // ── Start Discord RPC after process is confirmed running ─────────────────
+
+    // ── Start Discord RPC after process is confirmed running ──
     if (s.discordIPC !== false) startDiscordRPC(
       gameProcess.pid,
       (kind, text) => sendLog(kind, text, 'launcher'),
@@ -1502,13 +1505,14 @@ ipcMain.handle('game:launch', async (_, s) => {
       {
         advanced:         !!s.rpcAdvanced,
         autoReconnect:    s.rpcAutoReconnect !== false,
-        afkEnabled:       s.afkEnabled       !== false,
-        afkMinutes:       s.afkMinutes       || 5,
+        afkEnabled:       s.afkEnabled !== false,
+        afkMinutes:       s.afkMinutes || 5,
         telemetryEnabled: !!s.telemetryEnabled,
-        telemetryPath:    s.telemetryPath    || '',
+        telemetryPath:    s.telemetryPath || '',
         ets2mpLogsDir:    s.ets2mpLogsDir,
       }
     )
+
     currentLaunchSettings = s
     return { ok:true, pid:gameProcess.pid }
   } catch(err) {
@@ -3156,11 +3160,30 @@ ipcMain.handle('standalone:runExe', async (_, { exePath, bottlePath }) => {
     const wineBin = standaloneWineBin()
     if (!wineBin) return { ok:false, error:'Standalone Wine not installed.' }
     if (!fs.existsSync(exePath)) return { ok:false, error:`Installer not found: ${exePath}` }
-    const env = { ...process.env, WINEPREFIX: bottlePath, WINEDEBUG:'-all', WINEMSYNC:'1' }
-    // We launch and do NOT wait for it to close — Steam installer runs in background
-    // and the user installs ETS2 while it's running. We report launched.
-    spawn(wineBin, [exePath], { env, detached:true, stdio:'ignore' }).unref()
-    return { ok:true }
+
+    const env = {
+      ...process.env,
+      WINEPREFIX: bottlePath,
+      WINEDEBUG: '-all',
+      WINEMSYNC: '1'
+    }
+
+    return await new Promise(resolve => {
+      const child = spawn(wineBin, [exePath], {
+        env,
+        detached: true,
+        stdio: 'ignore'
+      })
+
+      child.once('error', err => {
+        resolve({ ok:false, error: `Failed to launch Wine: ${err.message}` })
+      })
+
+      child.once('spawn', () => {
+        child.unref()
+        resolve({ ok:true })
+      })
+    })
   } catch(e) {
     return { ok:false, error: e.message }
   }
@@ -3548,9 +3571,9 @@ ipcMain.handle('standalone:autoDetectSteamPath', (_, bottlePath) => {
     path.join(bottlePath, 'drive_c', 'Program Files', 'Steam'),
   ]
   for (const p of candidates) {
-    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'Steam.exe'))) return { ok:true, steamDir: p }
+    if (fs.existsSync(path.join(p, 'steam.exe'))) return { ok:true, steamDir: p }
   }
-  return { ok:false, error:'Steam.exe not found in the bottle.' }
+  return { ok:false, error:'steam.exe not found in the bottle.' }
 })
 
 // Open a path in macOS Finder
