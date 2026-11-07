@@ -5,6 +5,7 @@ const os    = require('os')
 const net   = require('net')
 const https = require('https')
 const { spawn, execFileSync, execSync, execFile } = require('child_process')
+const PINNED_WINE = require('./src/wine-release')
 
 let mainWindow  = null
 let gameProcess = null
@@ -20,6 +21,7 @@ function loadSettings() {
   try {
     if (fs.existsSync(settingsPath)) {
       const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+      s.standalonWineSlug = PINNED_WINE.slug
       // Migrate: remove legacy --verbose / -v from extraArgs since it's now always added internally
       if (s.extraArgs) {
         s.extraArgs = s.extraArgs.replace(/--verbose|-v\b/g, '').replace(/\s+/g, ' ').trim()
@@ -34,7 +36,7 @@ function loadSettings() {
            wineMode:'crossover',
            standalonBottlePath: path.join(os.homedir(), 'Library', 'Application Support', 'TruckersMP-Launcher', 'TruckersmpBottle'),
            standalonSteamDir:'', standalonGameDir:'', standalonDxmtDir:'', standalonDxmtVersion:'',
-           standalonWineSlug: '',
+           standalonWineSlug: PINNED_WINE.slug,
            standaloneWizardDone: false,
            standalonWineDebugLog: true,
            standalonRetinaMode: false,
@@ -44,7 +46,7 @@ function loadSettings() {
 function saveSettings(s) {
   const dir = path.dirname(settingsPath)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(settingsPath, JSON.stringify(s, null, 2))
+  fs.writeFileSync(settingsPath, JSON.stringify({ ...s, standalonWineSlug:PINNED_WINE.slug }, null, 2))
 }
 
 const CX_APP  = '/Applications/CrossOver.app'
@@ -2832,11 +2834,6 @@ const SW_WINE_DIR  = path.join(SW_DIR, 'wine')          // legacy single-wine di
 const SW_WINES_DIR = path.join(SW_DIR, 'wines')         // multi-wine parent — each install lives in wines/<slug>/
 const SW_DXMT_DIR  = path.join(SW_DIR, 'dxmt')          // extracted DXMT DLLs
 
-// nohero765/wine-builds- — stable signed builds (primary source)
-const NOHERO_API   = 'https://api.github.com/repos/nohero765/wine-builds-/releases?per_page=10'
-// BobTheHero6767/testing-wine-builds — dev builds, shown only when nohero765 has no releases
-const BOB_API      = 'https://api.github.com/repos/BobTheHero6767/testing-wine-builds/releases?per_page=10'
-
 // Recursively walk dir and return the first file whose name is in names[]
 function findBinary(dir, names, depth) {
   if (depth > 8) return null
@@ -2854,12 +2851,8 @@ function findBinary(dir, names, depth) {
   return null
 }
 
-// Locate the active standalone Wine binary.
-// Priority: 1) active slug in SW_WINES_DIR, 2) any slug (first alphabetically), 3) legacy SW_WINE_DIR.
+// Use only the pinned installation. A missing pin must never select another build.
 function standaloneWineBin() {
-  const s = loadSettings()
-  const activeSlug = s.standalonWineSlug || ''
-
   function findInRoot(rootDir) {
     if (!rootDir || !fs.existsSync(rootDir)) return null
     const srv = findBinary(rootDir, ['wineserver'], 0)
@@ -2870,22 +2863,7 @@ function standaloneWineBin() {
     return findBinary(rootDir, ['wine64', 'wine'], 0)
   }
 
-  // 1. Active slug
-  if (activeSlug) { const b = findInRoot(path.join(SW_WINES_DIR, activeSlug)); if (b) return b }
-
-  // 2. Any installed slug (first alphabetically)
-  if (fs.existsSync(SW_WINES_DIR)) {
-    try {
-      for (const e of fs.readdirSync(SW_WINES_DIR).sort()) {
-        const d = path.join(SW_WINES_DIR, e)
-        try { if (!fs.statSync(d).isDirectory()) continue } catch { continue }
-        const b = findInRoot(d); if (b) return b
-      }
-    } catch {}
-  }
-
-  // 3. Legacy single-wine dir (pre-multi-wine installs)
-  return findInRoot(SW_WINE_DIR)
+  return findInRoot(path.join(SW_WINES_DIR, PINNED_WINE.slug))
 }
 
 // Copy DXMT Windows-side DLLs into the bottle's system32 so Wine's native-DLL
@@ -3159,7 +3137,8 @@ function downloadToFile(url, dest, progressEvent) {
             mainWindow.webContents.send(progressEvent, { received, total })
           }
         })
-        res.on('end', () => { _activeWineDownloadReq = null; out.end(); resolve() })
+        res.on('end', () => { _activeWineDownloadReq = null; out.end(resolve) })
+        out.on('error', err => { _activeWineDownloadReq = null; req.destroy(); reject(err) })
         res.on('error', err => { _activeWineDownloadReq = null; out.destroy(); reject(err) })
       }).on('error', reject)
       _activeWineDownloadReq = { cancel: () => { req.destroy(); reject(new Error('cancelled')) } }
@@ -3177,70 +3156,10 @@ ipcMain.handle('standalone:cancelWineDownload', () => {
   return { ok: false }
 })
 
-// Fetch available wine versions.
-// Logic: try nohero765/wine-builds- first (Stable). If it has releases → show only those.
-// If nohero765 has NO releases → fall back and show BobTheHero6767 (Dev).
-ipcMain.handle('standalone:fetchWineRelease', async () => {
-  try {
-    const fetchErrors = []
-    function parseVersions(rels, extra) {
-      if (!Array.isArray(rels)) throw new Error('GitHub returned an invalid release list.')
-      const out = []
-      for (const rel of (Array.isArray(rels) ? rels : [])) {
-        const assets = rel.assets || []
-        const asset = assets.find(a => /\.tar\.(xz|gz)$/i.test(a.name))
-        if (!asset) continue
-        const tag = rel.tag_name || ''
-        const vm  = asset.name.match(/(\d+)\.(\d+)/) || tag.match(/(\d+)\.(\d+)/)
-        const major = vm ? parseInt(vm[1]) : 0
-        const minor = vm ? parseInt(vm[2]) : 0
-        out.push({
-          name:    asset.name,
-          url:     asset.browser_download_url,
-          size:    asset.size,
-          version: (rel.name || tag).trim() || asset.name,
-          major, minor,
-          ...extra,
-        })
-      }
-      return out
-    }
-
-    // Fetch nohero765/wine-builds- (Stable)
-    let noheroVersions = []
-    try {
-      const body = await httpsGet(NOHERO_API)
-      noheroVersions = parseVersions(JSON.parse(body.toString()), { isStable: true, isDevWine: false })
-    } catch(e) {
-      console.warn('[nohero fetch]', e.message)
-      fetchErrors.push(`Primary source: ${e.message}`)
-    }
-
-    // Fetch BobTheHero6767/testing-wine-builds (Dev)
-    let wineTestVersions = []
-    if (!noheroVersions.length) try {
-      const wtBody = await httpsGet(BOB_API)
-      wineTestVersions = parseVersions(JSON.parse(wtBody.toString()), { isDevWine: true, isStable: false })
-    } catch(e) {
-      console.warn('[bob-wine fetch]', e.message)
-      fetchErrors.push(`Fallback source: ${e.message}`)
-    }
-
-    // Show only nohero765 if it has releases; otherwise fall back to BobTheHero (Dev)
-    const useNohero = noheroVersions.length > 0
-    const versions  = useNohero ? noheroVersions : []
-    const devVersions = useNohero ? [] : wineTestVersions
-
-    if (!versions.length && !devVersions.length) {
-      if (fetchErrors.length) return { ok:false, error: fetchErrors.join(' ') }
-      return { ok:false, error:'No wine releases found. Check https://github.com/nohero765/wine-builds-/releases manually.' }
-    }
-
-    return { ok:true, versions, wineTestVersions: devVersions, useNohero }
-  } catch(e) {
-    return { ok:false, error: e.message }
-  }
-})
+// The wizard uses fixed release metadata, avoiding latest-release selection and API rate limits.
+ipcMain.handle('standalone:fetchWineRelease', async () => ({
+  ok:true, versions:[{ ...PINNED_WINE }], wineTestVersions:[], useNohero:true,
+}))
 
 // Delete the downloaded standalone Wine directory
 ipcMain.handle('standalone:deleteWine', async (_, slug) => {
@@ -3264,8 +3183,7 @@ ipcMain.handle('standalone:deleteWine', async (_, slug) => {
 
 // List all installed Wine versions (multi-wine manager)
 ipcMain.handle('standalone:listWines', () => {
-  const s = loadSettings()
-  const activeSlug = s.standalonWineSlug || ''
+  const activeSlug = PINNED_WINE.slug
   const wines = []
   if (fs.existsSync(SW_WINES_DIR)) {
     try {
@@ -3294,7 +3212,7 @@ ipcMain.handle('standalone:listWines', () => {
           fileName    = meta.fileName    || ''
           releaseName = meta.releaseName || ''
         } catch {}
-        wines.push({ slug: entry, version: version || entry, active: entry === activeSlug, bin, fileName, releaseName })
+        wines.push({ slug: entry, version: version || entry, active: entry === activeSlug, isPinned:entry === activeSlug, bin, fileName, releaseName })
       }
     } catch {}
   }
@@ -3331,14 +3249,13 @@ ipcMain.handle('standalone:listWines', () => {
     } catch {}
   }
 
-  // Auto-mark the first entry active if none is selected yet
-  if (wines.length && !wines.some(w => w.active)) wines[0].active = true
   return wines
 })
 
 // Set the active Wine installation by slug
 ipcMain.handle('standalone:setActiveWine', (_, slug) => {
   try {
+    if (slug !== PINNED_WINE.slug) return { ok:false, error:'This project is pinned to Wine 11.11.' }
     const s = loadSettings(); s.standalonWineSlug = slug; saveSettings(s)
     return { ok:true }
   } catch(e) { return { ok:false, error: e.message } }
@@ -3347,12 +3264,23 @@ ipcMain.handle('standalone:setActiveWine', (_, slug) => {
 // Download + extract a Wine tarball into SW_WINES_DIR/<slug>/ (or legacy SW_WINE_DIR if no slug)
 ipcMain.handle('standalone:downloadWine', async (_, url, slug, releaseName) => {
   try {
+    if (url !== PINNED_WINE.url) return { ok:false, error:'This project is pinned to Wine 11.11. Use the setup wizard to install that build.' }
+    slug = PINNED_WINE.slug
+    releaseName = PINNED_WINE.version
     const targetDir = slug ? path.join(SW_WINES_DIR, slug) : SW_WINE_DIR
     if (slug) fs.mkdirSync(SW_WINES_DIR, { recursive:true })
     fs.mkdirSync(SW_DIR, { recursive:true })
-    const tarPath = path.join(SW_DIR, 'wine-staging.tar.xz')
+    const tarPath = path.join(SW_DIR, PINNED_WINE.name)
     // Download
     await downloadToFile(url, tarPath, 'standalone:wineProgress')
+    const digest = await new Promise((resolve, reject) => {
+      const hash = require('crypto').createHash('sha256')
+      const input = fs.createReadStream(tarPath)
+      input.on('data', chunk => hash.update(chunk))
+      input.on('end', () => resolve(hash.digest('hex')))
+      input.on('error', reject)
+    })
+    if (digest !== PINNED_WINE.sha256) return { ok:false, error:'Wine 11.11 archive checksum does not match the pinned release. Download it again.' }
     // Clear old extraction for this slot
     if (fs.existsSync(targetDir)) fs.rmSync(targetDir, { recursive:true, force:true })
     fs.mkdirSync(targetDir, { recursive:true })

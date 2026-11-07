@@ -49,8 +49,8 @@ Switch between backends per game from the sidebar toggle:
 - **↻ Re-detect** 
 
 ### Standalone 
-- **Setup Wizard** installs the latest Wine build and DXMT release automatically.
-- **Wine version manager** install multiple Wine builds side by side, mark one **active**, uninstall old ones
+- **Setup Wizard** installs the pinned Wine 11.11 build and the latest DXMT release.
+- **Wine version manager** shows the pinned Wine 11.11 installation and lets you uninstall older builds.
 - **Status checklist** Wine installed / Bottle ready / DXMT version, each with a ✓
 - **Bottle Path** **Steam Directory inside bottle**, and **ETS2/ATS Game Directory inside bottle**, independently configurable
 - **Launch winecfg** and **Reinstall DXMT** shortcuts
@@ -143,7 +143,7 @@ Defaults (all rebindable in Settings → Launcher Options):
 
 > As of [DXMT 0.72](https://github.com/3Shain/dxmt/releases#release-v0.72), experimental Intel Mac support was added — Apple Silicon is still recommended, but Intel Macs may work.
 
-> As of now Standalone Wine mode currently installs **Wine 11.0** and **DXMT 0.80**.
+> Standalone Wine mode is pinned to **Wine development 11.11**. Other standalone Wine builds cannot be installed or selected, and the launcher will not fall back to them if 11.11 is missing.
 
 > its not mandatory to install ATS with ETS or opposite choose which multiplayer you would like to join and install the game you want based on that.
 ---
@@ -157,7 +157,7 @@ Defaults (all rebindable in Settings → Launcher Options):
 4. Click **Start Steam**, wait for it to finish starting up
 5. Hit **Launch ETS2 MP *or* ATS MP**
 
-If you need to install a different Wine build later, use **+ Install New** under Wine Versions, then mark the one you want as active.
+Use **+ Install New** under Wine Versions to reinstall the pinned build. The exact archive URL and SHA-256 are defined in [`src/wine-release.js`](src/wine-release.js); changing the project pin requires updating that recipe. Downloads are verified before replacing an existing installation.
 
 ### CrossOver Mode
 1. Launch the app — it will try to **auto detect** all paths on first run. Detection badges in the sidebar show what was found.

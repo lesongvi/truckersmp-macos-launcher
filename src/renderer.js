@@ -1973,14 +1973,9 @@ function swApplyWineMode(mode) {
 // ── Standalone Wine Setup Wizard ───────────────────────────────────────────────
 ;(function() {
   const wizard    = $('sw-wizard'); if (!wizard) return
-  let swRelease   = null   // { name, url, size, version, major, minor, isYaagl } from API
+  let swRelease   = null   // pinned release recipe from the main process
   let swWizStep   = 1
   let swDefaultBottlePath = ''  // resolved from swGetStatus on first badge refresh
-
-  // Convert a Wine version/filename string to a safe directory slug
-  function slugifyWine(str) {
-    return (str || 'wine').toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'wine'
-  }
 
   // ── helpers ────────────────────────────────────────────────────────────────
   function fmt(bytes) {
@@ -2109,30 +2104,20 @@ function swApplyWineMode(mode) {
   function closeWizard() { wizard.classList.add('hidden'); delete wizard.dataset.installOnly }
 
   // ── Step 1 ─────────────────────────────────────────────────────────────────
-  // Sources: nohero765/wine-builds- (Stable) → if has releases show ONLY those.
-  // If nohero765 has NO releases → show BobTheHero6767 (Dev) instead.
+  // The backend provides only the project's pinned Wine release.
 
-  function renderVersionPicker(versions, res) {
+  function renderVersionPicker(versions) {
     const info = $('sw-wine-release-info')
     if (!info) return
 
-    // nohero765 stable builds
-    const stableBuilds = (versions || []).filter(v => v.isStable)
-      .sort((a, b) => (b.major * 100 + b.minor) - (a.major * 100 + a.minor))
-    // BobTheHero dev builds
-    const devBuilds = ((res && res.wineTestVersions) || []).filter(v => v.isDevWine)
-      .sort((a, b) => (b.major * 100 + b.minor) - (a.major * 100 + a.minor))
-
-    // Pick which list to show — nohero takes precedence
-    const showStable = stableBuilds.length > 0
-    const list       = showStable ? stableBuilds : devBuilds
+    const list = (versions || []).filter(v => v.isPinned)
 
     if (!list.length) {
-      info.innerHTML = '<span style="color:var(--red)">No wine releases found from either source.</span>'
+      info.innerHTML = '<span style="color:var(--red)">Pinned Wine 11.11 release is unavailable.</span>'
       return
     }
 
-    // Default selection = first in list (newest)
+    // Exactly one build is offered by the pinned release recipe.
     swRelease = list[0]
 
     const selStyle   = 'border-color:var(--accent);background:rgba(59,130,246,0.1)'
@@ -2140,16 +2125,14 @@ function swApplyWineMode(mode) {
 
     const rows = list.map((v, i) => {
       const isSelected = i === 0
-      const badge = showStable
-        ? `<span style="color:#4ade80;font-size:10px;font-weight:700">✓ Stable</span>`
-        : `<span style="color:#a78bfa;font-size:10px;font-weight:700">Dev</span>`
+      const badge = '<span style="color:#4ade80;font-size:10px;font-weight:700">Pinned</span>'
       const dot = isSelected
         ? `<span class="sw-ver-dot" style="width:14px;font-size:12px;color:var(--accent)">●</span>`
         : `<span class="sw-ver-dot" style="width:14px;font-size:12px;color:var(--text-muted)">○</span>`
       return `<div class="sw-ver-row"
         data-ver-url="${v.url}" data-ver-name="${v.name}" data-ver-size="${v.size || 0}"
         data-ver-version="${v.version || ''}" data-ver-major="${v.major || 0}" data-ver-minor="${v.minor || 0}"
-        data-ver-dev="${v.isDevWine ? '1' : ''}"
+        data-ver-dev="${v.isDevWine ? '1' : ''}" data-ver-slug="${v.slug}"
         style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid;border-radius:6px;cursor:pointer;${isSelected ? selStyle : unselStyle}">
         ${dot}
         <span style="font-size:12px;font-weight:600">${v.version || v.name}</span>
@@ -2183,6 +2166,7 @@ function swApplyWineMode(mode) {
         const dot = row.querySelector('.sw-ver-dot')
         if (dot) { dot.textContent = '●'; dot.style.color = 'var(--accent)' }
         swRelease = {
+          slug:      row.dataset.verSlug,
           url:       row.dataset.verUrl,
           name:      row.dataset.verName,
           size:      parseInt(row.dataset.verSize) || 0,
@@ -2198,7 +2182,7 @@ function swApplyWineMode(mode) {
 
   function fetchWineRelease() {
     const info = $('sw-wine-release-info')
-    if (info) info.innerHTML = '<span style="color:var(--text-secondary)">Checking available versions…</span>'
+    if (info) info.innerHTML = '<span style="color:var(--text-secondary)">Loading pinned Wine 11.11…</span>'
     window.api.swFetchWineRelease().then(res => {
       if (!res.ok) {
         if (info) {
@@ -2251,7 +2235,7 @@ function swApplyWineMode(mode) {
     if (!swRelease) { setErr('sw-wine-err', 'Release info not loaded yet. Wait a moment and try again.'); return }
     btnDlWine.disabled = true; btnDlWine.textContent = 'Downloading…'
     if (btnCancelWineDl) { btnCancelWineDl.style.display = ''; btnCancelWineDl.disabled = false; btnCancelWineDl.textContent = '✕ Cancel' }
-    const slug = slugifyWine(swRelease.version || swRelease.name)
+    const slug = swRelease.slug
     const res = await window.api.swDownloadWine(swRelease.url, slug, swRelease.name || swRelease.version || '')
     btnDlWine.disabled = false; btnDlWine.textContent = 'Download & Install Wine'
     if (btnCancelWineDl) { btnCancelWineDl.style.display = 'none'; btnCancelWineDl.disabled = false; btnCancelWineDl.textContent = '✕ Cancel' }
@@ -2280,40 +2264,6 @@ function swApplyWineMode(mode) {
   if (swCheckWineRelease) swCheckWineRelease.addEventListener('click', () => {
     fetchWineRelease()
   })
-
-  // Custom GitHub release URL — user can paste a direct .tar.xz / .tar.gz link
-  const swCustomUrlInput = $('sw-custom-wine-url')
-  const swApplyCustomUrl = $('sw-apply-custom-url')
-  if (swApplyCustomUrl && swCustomUrlInput) {
-    swApplyCustomUrl.addEventListener('click', () => {
-      const url = swCustomUrlInput.value.trim()
-      if (!url) { setErr('sw-wine-err', 'Please enter a URL first.'); return }
-      if (!/^https?:\/\//i.test(url)) { setErr('sw-wine-err', 'URL must start with https://'); return }
-      const filename = url.split('/').pop() || 'custom-wine'
-      swRelease = {
-        url,
-        name: filename,
-        size: 0,
-        version: filename.replace(/\.tar\.(xz|gz)$/i, '') + ' ⚠ unofficial',
-        major: 0, minor: 0,
-        isCustomUrl: true,
-        isDevWine: true,
-      }
-      const desc = $('sw-step1-desc')
-      if (desc) desc.textContent = `This will install from custom URL: ${filename} (unofficial — not tested)`
-      const info = $('sw-wine-release-info')
-      if (info) info.innerHTML = `<span style="color:#fb923c">⚠ Custom URL — install at your own risk: <code style="font-size:10px">${url}</code></span>`
-      setErr('sw-wine-err', '')
-      swApplyCustomUrl.textContent = '✓ Applied'
-      setTimeout(() => { swApplyCustomUrl.textContent = 'Apply URL' }, 2000)
-    })
-    // Save custom URL to settings when it changes
-    swCustomUrlInput.addEventListener('input', () => {
-      settings.customWineRepoUrl = swCustomUrlInput.value.trim()
-    })
-    // Restore saved custom URL on open
-    if (settings.customWineRepoUrl) swCustomUrlInput.value = settings.customWineRepoUrl
-  }
 
   // ── Step 2 ─────────────────────────────────────────────────────────────────
   function prefillBottlePath() {
@@ -2535,10 +2485,13 @@ function swApplyWineMode(mode) {
         const row = document.createElement('div')
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:6px;border:1px solid ' +
           (w.active ? 'rgba(99,102,241,0.22);background:rgba(99,102,241,0.09)' : 'transparent;background:transparent;cursor:pointer')
-        if (!w.active) {
-          row.title = 'Click to set as active Wine'
+        if (!w.active && w.isPinned) {
+          row.title = 'Click to use pinned Wine 11.11'
           row.onmouseenter = () => { row.style.background = 'rgba(255,255,255,0.04)' }
           row.onmouseleave = () => { row.style.background = 'transparent' }
+        } else if (!w.isPinned) {
+          row.title = 'This project uses Wine 11.11. Other installations can be uninstalled.'
+          row.style.cursor = 'default'
         }
 
         const nameWrap = document.createElement('div')
@@ -2576,9 +2529,10 @@ function swApplyWineMode(mode) {
           nameWrap.appendChild(sub)
         }
 
-        if (!w.active) {
+        if (!w.active && w.isPinned) {
           row.addEventListener('click', async () => {
-            await window.api.swSetActiveWine(w.slug)
+            const res = await window.api.swSetActiveWine(w.slug)
+            if (!res.ok) { showToast(res.error, 'error'); return }
             settings.standalonWineSlug = w.slug
             renderWineManager(); swRefreshStatusBadges()
           })

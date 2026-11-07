@@ -810,19 +810,9 @@
       <!-- Step 1: Download Wine -->
       <div class="sw-step-panel active" id="swp-1">
         <div class="sw-step-title">Step 1 — Download Wine</div>
-        <div class="sw-desc" id="sw-step1-desc">Select a Wine version below, then click Download &amp; Install.</div>
+        <div class="sw-desc" id="sw-step1-desc">This project uses Wine 11.11. Download &amp; Install sets up the pinned build.</div>
         <div class="sw-info-row" id="sw-wine-release-info">
-          <span style="color:var(--text-secondary)">Press "Check" to look up available releases.</span>
-        </div>
-        <!-- Custom GitHub release URL -->
-        <div style="margin-top:10px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:7px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:5px">Custom GitHub Release URL</div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <input id="sw-custom-wine-url" type="text" placeholder="https://github.com/user/repo/releases/download/tag/file.tar.xz" spellcheck="false"
-              style="flex:1;font-size:11px;padding:5px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:var(--text-primary);outline:none;min-width:0"/>
-            <button id="sw-apply-custom-url" class="sw-btn-ghost" style="padding:4px 10px;font-size:11px;white-space:nowrap">Apply URL</button>
-          </div>
-          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px">Direct link to a .tar.xz or .tar.gz Wine archive. Tagged as ⚠ Unofficial — not tested.</div>
+          <span style="color:var(--text-secondary)">Wine 11.11 is pinned for this project.</span>
         </div>
         <div class="sw-progress-wrap" id="sw-wine-prog-wrap">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -839,7 +829,7 @@
         <div class="sw-actions" style="flex-wrap:wrap;gap:8px">
           <button class="sw-btn-ghost" id="sw-close-1">Close</button>
           <button class="sw-btn-ghost" id="sw-skip-wine" style="color:var(--green);border-color:var(--green)">Already installed → Skip</button>
-          <button class="sw-btn-ghost" id="sw-check-wine-release">Check for releases</button>
+          <button class="sw-btn-ghost" id="sw-check-wine-release">Load Wine 11.11</button>
           <button class="sw-btn" id="sw-dl-wine">Download &amp; Install Wine</button>
         </div>
       </div>
