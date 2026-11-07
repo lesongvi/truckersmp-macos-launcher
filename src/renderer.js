@@ -110,7 +110,7 @@ async function init() {
 
   // Auto-detect standalone bottle contents (Steam + ETS2 inside the bottle)
   if (settings.wineMode === 'standalone' && settings.standalonBottlePath) {
-    detectStandaloneBottlePaths(settings.standalonBottlePath)
+    await detectStandaloneBottlePaths(settings.standalonBottlePath)
   }
   fillField('s-extra',  settings.extraArgs)
   // Wine mode toggle
@@ -337,42 +337,30 @@ function updatePreview() {
 // ── Auto-detect paths inside a standalone Wine bottle ─────────────────────────
 // Checks the standard Steam/ETS2 locations inside the bottle and fills in any
 // empty fields. Safe to call multiple times — never overwrites user-set values.
-function detectStandaloneBottlePaths(bottlePath) {
+async function detectStandaloneBottlePaths(bottlePath) {
   if (!bottlePath) return
-  const driveC = bottlePath + '/drive_c'
-  const steamCandidates = [
-    driveC + '/Program Files (x86)/Steam',
-    driveC + '/Program Files/Steam',
-  ]
-  // Detect Steam dir
-  steamCandidates.forEach(c => {
-    if (!settings.standalonSteamDir) {
-      window.api.pathExists(c + '/steam.exe').then(ok => {
-        if (ok && !settings.standalonSteamDir) {
-          settings.standalonSteamDir = c
-          fillField('sw-steam-dir', c)
-          updateSteamBtn()
-          window.api.saveSettings(settings)
-        }
-      })
+  const results = await Promise.allSettled([
+    window.api.swAutoDetectSteamPath(bottlePath),
+    window.api.swAutoDetectGamePath(bottlePath),
+  ])
+  let changed = false
+  for (const [index, key, field, resultKey] of [
+    [0, 'standalonSteamDir', 'sw-steam-dir', 'steamDir'],
+    [1, 'standalonGameDir', 'sw-game-dir', 'gameDir'],
+  ]) {
+    const result = results[index]
+    if (!settings[key] && result.status === 'fulfilled' && result.value.ok) {
+      settings[key] = result.value[resultKey]
+      fillField(field, settings[key])
+      changed = true
     }
-  })
-  // Detect ETS2 game dir — check both 32-bit and 64-bit Steam install locations
-  if (!settings.standalonGameDir) {
-    const ets2Candidates = [
-      driveC + '/Program Files (x86)/Steam/steamapps/common/Euro Truck Simulator 2',
-      driveC + '/Program Files/Steam/steamapps/common/Euro Truck Simulator 2',
-    ]
-    ets2Candidates.forEach(ets2 => {
-      window.api.pathExists(ets2 + '/bin').then(ok => {
-        if (ok && !settings.standalonGameDir) {
-          settings.standalonGameDir = ets2
-          fillField('sw-game-dir', ets2)
-          updateLaunchBtn()
-          window.api.saveSettings(settings)
-        }
-      })
-    })
+  }
+  if (changed) await window.api.saveSettings(settings)
+  if (settings.wineMode === 'standalone') {
+    setBadge('badge-steam', !!settings.standalonSteamDir)
+    setBadge('badge-game', !!settings.standalonGameDir)
+    updateSteamBtn()
+    updateLaunchBtn()
   }
 }
 
@@ -415,7 +403,14 @@ function updateLaunchBtn() {
   } else {
     btn.innerHTML='<span id="launch-icon">▶</span><span id="launch-text">Launch ETS2 MP</span>'
     btn.className='btn-launch'; btn.disabled=!ready
-    if(warn) warn.classList.toggle('hidden', ready)
+    if(warn) {
+      warn.classList.toggle('hidden', ready)
+      warn.textContent = isStandalone && !settings.standalonSteamDir
+        ? 'Install Steam in your bottle using Settings → Setup Wizard'
+        : isStandalone && !settings.standalonGameDir
+          ? 'Install ETS2 in Steam, then click Re-detect'
+          : 'Configure paths in Settings first'
+    }
     if(fk) fk.classList.add('hidden')
   }
 }
@@ -1213,7 +1208,9 @@ function wireEvents() {
       } catch {}
       btnAutoDetect.disabled = false; btnAutoDetect.textContent = '🔍 Auto-detect Paths'
       if (found.length) {
-        collect(); window.api.saveSettings(settings)
+        collect(); await window.api.saveSettings(settings)
+        updateSteamBtn(); updateLaunchBtn()
+        swApplyWineMode(settings.wineMode)
         pushLog({ kind:'success', text:'Auto-detected: ' + found.join(' | '), ts:Date.now() })
       } else {
         showToast('Nothing detected. Make sure Steam and ETS2 are installed inside the bottle first.', 'warn')
@@ -1625,6 +1622,9 @@ function wireEvents() {
     if(detected.gameDir)    {settings.gameDir=detected.gameDir;       fillField('s-game',   settings.gameDir);    setManual('game',  false)}
     // In standalone mode, override steam/game badges with standalone-specific paths
     if (settings.wineMode === 'standalone') {
+      await detectStandaloneBottlePaths(settings.standalonBottlePath)
+      const st = await window.api.swGetStatus()
+      setBadge('badge-crossover', st.wineInstalled)
       setBadge('badge-steam', !!settings.standalonSteamDir)
       setBadge('badge-game',  !!settings.standalonGameDir)
     }
@@ -2058,7 +2058,9 @@ function swApplyWineMode(mode) {
       }
     }
     if (skipStep2Btn) {
-      if (st.bottleExists) {
+      const bp = settings.standalonBottlePath || st.defaultBottlePath
+      const steam = bp ? await window.api.swAutoDetectSteamPath(bp) : { ok:false }
+      if (st.bottleExists && steam.ok) {
         skipStep2Btn.style.color       = 'var(--green)'
         skipStep2Btn.style.borderColor = 'var(--green)'
         skipStep2Btn.style.boxShadow   = '0 0 8px rgba(74,222,128,0.45), 0 0 0 1px rgba(74,222,128,0.18)'
@@ -2199,7 +2201,12 @@ function swApplyWineMode(mode) {
     if (info) info.innerHTML = '<span style="color:var(--text-secondary)">Checking available versions…</span>'
     window.api.swFetchWineRelease().then(res => {
       if (!res.ok) {
-        if (info) info.innerHTML = `<span style="color:var(--red)">Failed to fetch: ${res.error}</span>`
+        if (info) {
+          const error = document.createElement('span')
+          error.style.color = 'var(--red)'
+          error.textContent = `Failed to fetch: ${res.error}`
+          info.replaceChildren(error)
+        }
         return
       }
       renderVersionPicker(res.versions, res)
@@ -2365,7 +2372,8 @@ function swApplyWineMode(mode) {
       btnCreateBottle.disabled = false; btnCreateBottle.textContent = 'Create Bottle & Launch Steam'
       return
     }
-    btnCreateBottle.style.display = 'none'
+    btnCreateBottle.disabled = false
+    btnCreateBottle.textContent = 'Relaunch Steam Installer'
     // Auto-detect Steam & ETS2 paths in the bottle right after Steam installer launches
     if (resolvedBottlePath) {
       try {
@@ -2382,23 +2390,30 @@ function swApplyWineMode(mode) {
   const btnBack2  = $('sw-back-2')
   const btnSkip2  = $('sw-skip-2')
   if (btnBack2) btnBack2.addEventListener('click', () => showStep(1))
-  if (btnSkip2) btnSkip2.addEventListener('click', () => showStep(3))
-  if (btnNext2) btnNext2.addEventListener('click', async () => {
-    // Auto-detect Steam & ETS2 paths before advancing — saves the user from filling them manually
+  async function finishSteamSetup() {
+    setErr('sw-bottle-err', '')
     const bp = ($('sw-wiz-bottle') || {}).value?.trim() || settings.standalonBottlePath
-    if (bp) {
-      await window.api.swKillWineserver(bp).catch(() => {})
-      try {
-        const stRes = await window.api.swAutoDetectSteamPath(bp)
-        if (stRes.ok && stRes.steamDir) { settings.standalonSteamDir = stRes.steamDir; fillField('sw-steam-dir', stRes.steamDir) }
-      } catch {}
-      try {
-        const gRes = await window.api.swAutoDetectGamePath(bp)
-        if (gRes.ok && gRes.gameDir) { settings.standalonGameDir = gRes.gameDir; fillField('sw-game-dir', gRes.gameDir) }
-      } catch {}
+    if (!bp) { setErr('sw-bottle-err', 'Choose a bottle location and install Steam first.'); return }
+    try {
+      const steam = await window.api.swAutoDetectSteamPath(bp)
+      if (!steam.ok) {
+        setErr('sw-bottle-err', 'Steam is not installed in this bottle yet. Launch the Steam installer and finish its installation, then try Next again.')
+        return
+      }
+      settings.standalonBottlePath = bp
+      fillField('sw-bottle-path', bp)
+      settings.standalonSteamDir = steam.steamDir
+      fillField('sw-steam-dir', steam.steamDir)
+      await detectStandaloneBottlePaths(bp)
+      await window.api.saveSettings(settings)
+      swApplyWineMode(settings.wineMode)
+      showStep(3)
+    } catch (err) {
+      setErr('sw-bottle-err', 'Could not check Steam installation: ' + err.message)
     }
-    showStep(3)
-  })
+  }
+  if (btnSkip2) btnSkip2.addEventListener('click', finishSteamSetup)
+  if (btnNext2) btnNext2.addEventListener('click', finishSteamSetup)
 
   // ── Step 3 ─────────────────────────────────────────────────────────────────
   // Auto-install DXMT from GitHub
@@ -2463,6 +2478,13 @@ function swApplyWineMode(mode) {
   // ── Status badges in settings panel ────────────────────────────────────────
   function swRefreshStatusBadges() {
     window.api.swGetStatus().then(st => {
+      if (settings.wineMode === 'standalone') {
+        setBadge('badge-crossover', st.wineInstalled)
+        setBadge('badge-steam', !!settings.standalonSteamDir)
+        setBadge('badge-game', !!settings.standalonGameDir)
+        updateSteamBtn()
+        updateLaunchBtn()
+      }
       function set(indId, lblId, ok, okText, missText) {
         const ind=$( indId); const lbl=$(lblId); if(!ind||!lbl) return
         ind.textContent = ok ? '✓' : '○'

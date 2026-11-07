@@ -237,6 +237,46 @@ function runAutoDetect() {
   return r
 }
 
+function buildArgs(s) {
+  // Extra args provided by the user (from Settings → Extra Arguments)
+  const userExtra = s.extraArgs ? s.extraArgs.trim().split(/\s+/).filter(Boolean) : []
+  // Always ensure -v (verbose) is included for diagnostic output.
+  // truckersmp-cli uses -v (short form) — there is no --wine flag;
+  // the wine binary is set via the WINE environment variable.
+  if (!userExtra.includes('-v') && !userExtra.includes('--verbose')) userExtra.push('-v')
+
+  if (s.launchMode === 'official') {
+    // Official Wine mode: use the truckersmp-cli flags exactly as documented.
+    // -w          → use Wine (not Proton/Steam runtime)
+    // -x DIR      → Wine prefix / CrossOver bottle
+    // -g DIR      → game directory
+    // --wine-steam-dir DIR → Steam directory inside the bottle
+    // -r dx11     → force DirectX 11 renderer (avoids OpenGL fallback)
+    // Wine binary is controlled via WINE env var (no --wine flag in truckersmp-cli)
+    const a = ['-w']
+    if (s.bottlePath) a.push('-x', s.bottlePath)
+    if (s.gameDir)    a.push('-g', s.gameDir)
+    if (s.steamDir)   a.push('--wine-steam-dir', s.steamDir)
+    if (!s.discordIPC) a.push('--without-wine-discord-ipc-bridge')
+    a.push('-r', 'dx11')
+    a.push('start', 'ets2mp')
+    a.push(...userExtra)
+    return a
+  }
+  // macOS community mode — wine binary is set via WINE env var (see game:launch handler).
+  // effectiveWinePath (wine64) is set in the env before spawn so truckersmp-cli
+  // picks it up automatically and uses the 64-bit loader required by ETS2.
+  const a = ['-w']
+  if (s.gameDir)    a.push('-g', s.gameDir)
+  if (s.bottlePath) a.push('-x', s.bottlePath)
+  if (s.steamDir)   a.push('--wine-steam-dir', s.steamDir)
+  if (!s.discordIPC) a.push('--without-wine-discord-ipc-bridge')
+  a.push('-r', 'dx11')
+  a.push('start', 'ets2mp')
+  a.push(...userExtra)
+  return a
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -1417,6 +1457,47 @@ ipcMain.handle('shell:reveal', (_, p) => {
 })
 
 
+const RUNTIME_HINTS = [
+  // ── Wine error 193 (Bad EXE format) ───────────────────────────────────────
+  // On CrossOver 26 ARM the only wine binary is "wine" (no wine64).
+  // Error 193 is caused by a win32 (32-bit) CrossOver bottle. ETS2 and
+  // truckersmp-cli.exe are 64-bit — they require a win64 bottle.
+  {
+    pat:/bad exe format|0xc000007b|error.*193|193.*bad exe|exe format|module not found.*wine/i,
+    hint:'Error 193 (Bad EXE format) — the CrossOver bottle is 32-bit (win32).\n' +
+         'ETS2 and truckersmp-cli.exe are 64-bit programs and need a 64-bit bottle.\n\n' +
+         'FIX:\n' +
+         '  1. Open CrossOver → click the + button to create a new bottle\n' +
+         '  2. Name it "ETS2" (or anything you like)\n' +
+         '  3. Set Windows version to "Windows 10" — this creates a 64-bit (win64) bottle\n' +
+         '  4. Inside the new bottle, install Steam (search CrossOver\'s app library for Steam)\n' +
+         '  5. Open Steam inside CrossOver → install Euro Truck Simulator 2\n' +
+         '  6. In this launcher → Settings → update Bottle, Steam Dir, and Game Dir\n' +
+         '     to point to the new bottle\n\n' +
+         'You can verify the bottle architecture: a win64 bottle has\n' +
+         '  drive_c/windows/syswow64/   inside it. A win32 bottle does not.'
+  },
+  // Python / CLI issues
+  { pat:/no module named/,           hint:'A required Python module is missing. Try: pip3 install truckersmp-cli --upgrade' },
+  { pat:/importerror|modulenotfound/, hint:'Python dependency missing. Try: pip3 install truckersmp-cli --upgrade' },
+  { pat:/permission denied/,         hint:'Permission error. Try: chmod +x "$(which truckersmp-cli)"' },
+  { pat:/command not found/,         hint:'A required command was not found. Verify your PATH and CLI path in Settings.' },
+  // Wine / mode-aware hints
+  { pat:/wine.*not found|no wine/,   hint:'Wine binary not found. Check the Wine path in Settings.' },
+  { pat:/wineserver/,                hint:'wineserver error — try restarting your Wine session or running Force Kill.' },
+  { pat:/err:.*d3d|dxgi.*failed/,    hint:'DirectX/D3D error. Try switching the Graphics Translator in Settings.' },
+  { pat:/err:.*opengl|vulkan/,       hint:'OpenGL/Vulkan error. Try a different Graphics Translator (D3DMetal or DXVK).' },
+  // TruckersMP auth / network
+  { pat:/authentication failed|auth error/, hint:'TruckersMP authentication failed. Make sure you are logged into Steam and your game is up to date.' },
+  { pat:/connection refused|etimedout|econnreset/, hint:'Cannot reach TruckersMP servers. Check your internet connection and firewall.' },
+  { pat:/ssl.*error|certificate/,    hint:'SSL/TLS error. Your system clock may be wrong, or a firewall is blocking the connection.' },
+  { pat:/outdated|update required/,  hint:'Your TruckersMP client or game version is outdated. Update ETS2 and truckersmp-cli.' },
+  // Steam
+  { pat:/steam.*not found|steamclient/, hint:'Steam not found inside the bottle. Make sure Steam is installed and the Steam Directory is correct in Settings.' },
+  // ETS2
+  { pat:/game.*not found|ets2.*missing/, hint:'ETS2 not found. Verify the Game Directory path in Settings.' },
+]
+
 // ── Known exit codes ─────────────────────────────────────────────────────────
 const EXIT_HINTS = {
   1:   'Generic error — see the log above for details.',
@@ -1452,10 +1533,108 @@ ipcMain.handle('game:launch', async (_, s) => {
       `truckersmp-cli exists but is not executable:\n  ${s.cliPath}\n\n` +
       'Fix — run this in Terminal:\n' +
       `  chmod +x "${s.cliPath}"` }
- 
   }
 
-  try {
+  // ── Wine mode: standalone vs CrossOver ───────────────────────────────────────
+  const isStandalone = s.wineMode === 'standalone'
+
+  if (isStandalone) {
+    // Standalone wine checks
+    const swBin = standaloneWineBin()
+    if (!swBin) return { ok:false, error:
+      'Standalone Wine is not installed.\n\n' +
+      'Fix: Open Settings → Wine Mode → Standalone Wine Setup Wizard and complete Step 1.' }
+    const swBottle = s.standalonBottlePath
+    if (!swBottle || !fs.existsSync(path.join(swBottle, 'drive_c'))) return { ok:false, error:
+      'Standalone Wine bottle not found.\n\n' +
+      'Fix: Complete the Standalone Wine Setup Wizard (Step 2 — Create Bottle).' }
+    // Override wine + bottle paths for launch
+    if (!s.standalonSteamDir) return { ok:false, error:
+      'Standalone Steam Directory is not set.\n\n' +
+      'Fix: Open Settings → Wine Mode → standalone paths, set the Steam folder inside your bottle.\n' +
+      'Or complete the Setup Wizard Step 4.' }
+    if (!s.standalonGameDir) return { ok:false, error:
+      'Standalone ETS2 Game Directory is not set.\n\n' +
+      'Fix: Open Settings → Wine Mode → standalone paths, set the ETS2 folder inside your bottle.\n' +
+      'Or complete the Setup Wizard Step 4.' }
+    s = { ...s, winePath: swBin, bottlePath: swBottle,
+          steamDir: s.standalonSteamDir,
+          gameDir:  s.standalonGameDir }
+  } else {
+    if (!s.winePath) return { ok:false, error:
+      'CrossOver Wine path is not set.\n\n' +
+      'Fix: Open Settings → Wine (CrossOver) and set the Wine binary path,\n' +
+      'or click "Use detected CrossOver Wine" if CrossOver is installed.' }
+
+    if (!fs.existsSync(s.winePath)) return { ok:false, error:
+      `CrossOver Wine binary not found at:\n  ${s.winePath}\n\n` +
+      'Why this happens:\n' +
+      '  • CrossOver is not installed\n' +
+      '  • CrossOver was updated and the binary moved\n' +
+      '  • The path in Settings is wrong\n\n' +
+      'Fix:\n' +
+      '  1. Make sure CrossOver is installed in /Applications/CrossOver.app\n' +
+      '  2. Click Re-detect in the sidebar\n' +
+      '  3. Or browse to the wine binary manually in Settings → Wine.\n' +
+      '     Typical CrossOver location: /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine' }
+
+    if (!s.bottlePath) return { ok:false, error:
+      'CrossOver Bottle path is not set.\n\n' +
+      'Fix: Open Settings → Wine (CrossOver) → CrossOver Bottle\n' +
+      'and browse to your bottle folder.\n\n' +
+      'Typical location:\n' +
+      '  ~/Library/Application Support/CrossOver/Bottles/Steam' }
+
+    if (!fs.existsSync(s.bottlePath)) return { ok:false, error:
+      `CrossOver Bottle not found at:\n  ${s.bottlePath}\n\n` +
+      'Why this happens:\n' +
+      '  • The bottle was deleted or renamed in CrossOver\n' +
+      '  • The path in Settings is wrong\n\n' +
+      'Fix: Open CrossOver, check your bottles list, then update the path in Settings.' }
+  }
+
+  const bottleDriveC = path.join(s.bottlePath, 'drive_c')
+  if (!isStandalone && !fs.existsSync(bottleDriveC)) return { ok:false, error:
+    `The folder at:\n  ${s.bottlePath}\n` +
+    'does not look like a valid Wine bottle (missing drive_c).\n\n' +
+    'Fix: Browse to the correct bottle folder in Settings → Wine (CrossOver).\n' +
+    'A valid CrossOver bottle has a "drive_c" folder inside it.' }
+
+  if (!s.gameDir) return { ok:false, error:
+    'ETS2 Game Directory is not set.\n\n' +
+    'Fix: Open Settings → Game Directory and browse to your\n' +
+    'Euro Truck Simulator 2 folder inside the CrossOver bottle.\n\n' +
+    'Typical location inside the bottle:\n' +
+    '  drive_c/Program Files (x86)/Steam/steamapps/common/Euro Truck Simulator 2' }
+
+  if (!fs.existsSync(s.gameDir)) return { ok:false, error:
+    `ETS2 Game Directory not found at:\n  ${s.gameDir}\n\n` +
+    'Why this happens:\n' +
+    '  • ETS2 is not installed in your CrossOver bottle\n' +
+    '  • The path in Settings is wrong\n\n' +
+    'Fix:\n' +
+    '  1. Open CrossOver → Steam → install Euro Truck Simulator 2\n' +
+    '  2. Then update the Game Directory path in Settings.' }
+
+  // ── CLI sanity check — make sure it is NOT a wine binary ───────────────────
+  // If the user accidentally sets the CLI path to a wine binary (e.g. wine64, wine,
+  // wineserver) Python will try to execute the binary as a Python script and crash
+  // with "SyntaxError: Non-UTF-8 code starting with '\xcf'".
+  const cliBn = path.basename(s.cliPath).toLowerCase()
+  if (['wine','wine64','wine-preloader','wineserver','wineloader','wineloader64'].includes(cliBn)) {
+    return { ok:false, error:
+      `The CLI Path points to a Wine binary (${path.basename(s.cliPath)}), not truckersmp-cli.\n\n` +
+      'The "CLI Path" field must point to the truckersmp-cli Python script, not to Wine.\n\n' +
+      'How to find truckersmp-cli:\n' +
+      '  Run in Terminal:  which truckersmp-cli\n' +
+      '  Or:               pip3 show -f truckersmp-cli | grep truckersmp-cli\n\n' +
+      'Typical locations:\n' +
+      '  ~/Library/Python/3.x/bin/truckersmp-cli\n' +
+      '  /Library/Frameworks/Python.framework/Versions/3.x/bin/truckersmp-cli\n' +
+      '  /usr/local/bin/truckersmp-cli\n\n' +
+      'The Wine path (wine64) goes in Settings → Wine Path, not CLI Path.' }
+  }
+
   // ── Wine binary check ─────────────────────────────────────────────────────
   // CrossOver 26 on Apple Silicon ships a single universal "wine" binary that
   // handles all Windows architectures internally — there is no separate wine64.
@@ -1484,18 +1663,151 @@ ipcMain.handle('game:launch', async (_, s) => {
   }
 
   // Soft warning: check ETS2 executable exists
-    const ets2exe = path.join(s.gameDir, 'bin', 'win_x64', 'eurotrucks2.exe')
+  const ets2exe = path.join(s.gameDir, 'bin', 'win_x64', 'eurotrucks2.exe')
+  if (!fs.existsSync(ets2exe)) {
+    sendLog('warn', `ETS2 executable not found at: ${ets2exe}`)
+    sendLog('warn', isStandalone
+      ? '  The game may not start. Make sure ETS2 is fully installed inside the bottle.'
+      : '  The game may not start. Make sure ETS2 is fully installed inside your CrossOver bottle.')
+  }
 
-    if (!fs.existsSync(ets2exe)) {
-      sendLog('warn', `ETS2 executable not found at: ${ets2exe}`)
-      sendLog('warn', isStandalone
-        ? '  The game may not start. Make sure ETS2 is fully installed inside the bottle.'
-        : '  The game may not start. Make sure ETS2 is fully installed inside your CrossOver bottle.')
+  // ── Build environment and args ─────────────────────────────────────────────
+  const args = buildArgs(s)
+
+  // For standalone wine, use standaloneWineEnv() so DYLD_FALLBACK_LIBRARY_PATH,
+  // PATH (wine bin dir), and WINEESYNC are correctly set. Without these,
+  // macOS cannot find winemetal.dylib and DXMT falls back to WGL/OpenGL.
+  // All other wine spawns in this file already use standaloneWineEnv correctly.
+  const env = isStandalone
+    ? standaloneWineEnv(effectiveWinePath, s.bottlePath)
+    : { ...process.env }
+  env['WINE'] = effectiveWinePath
+  if (!isStandalone && s.bottlePath) env['WINEPREFIX'] = s.bottlePath
+  // standaloneWineEnv sets WINEPREFIX, WINEMSYNC, and WINEESYNC for standalone.
+  // WINEESYNC stays in the game (Stage 2) env — it is only deleted for Steam (Stage 1).
+
+  if (isStandalone) {
+    // WINEMSYNC already set by standaloneWineEnv; only override WINEDEBUG.
+    // NOTE: WINEESYNC is intentionally NOT set here — it is only safe in Stage 1
+    // for Wine boot services. For the game process it is not needed (WINEMSYNC
+    // handles sync on Apple Silicon) and can cause fd exhaustion if enabled.
+    env['WINEDEBUG'] = '-all'
+    const swDxmtDir = s.standalonDxmtDir
+    if (swDxmtDir && fs.existsSync(path.join(swDxmtDir, 'dxgi.dll'))) {
+      // Copy DLLs into the bottle's system32, and deploy winemetal if the archive
+      // included one, so Wine's native-DLL lookup and Metal backend both work.
+      ensureDxmtInBottle(s.bottlePath, swDxmtDir, null, effectiveWinePath)
+      // Per DXMT guide (non-builtin): override dxgi, d3d11, d3d10core as native first
+      env['WINEDLLOVERRIDES'] = 'dxgi=n,b;d3d11=n,b;d3d10core=n,b;d3d9=n,b;d3d10=n,b;d3d10_1=n,b'
+      // DXMT active (DLLs deployed, overrides set)
     }
+    // ── Stage 2 (game) extras — safe and correct here, NOT in Stage 1 (Steam) ──
+    // Reduces wineserver CPU on Apple Silicon by disabling kernel write-watch emulation.
+    // V8 is not present in ETS2, so the GetWriteWatch breakage does not apply here.
+    env['WINE_DISABLE_KERNEL_WRITEWATCH'] = '1'
+    // MoltenVK tuning for the game's Vulkan renderer.
+    env['MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS'] = '1'
+    env['MVK_CONFIG_USE_METAL_PRIVATE_API']      = '1'
+  } else {
+    // CrossOver: needs the bottle NAME via CX_BOTTLE
+    if (s.bottlePath) env['CX_BOTTLE'] = path.basename(s.bottlePath)
+  }
+
+  // Metal HUD: user toggle wins
+  env['MTL_HUD_ENABLED'] = s.metalHud ? '1' : '0'
+
+  sendLog('system', '══════════════════════════════════════')
+  sendLog('system', '  TruckersMP for macOS — ETS2 MP     ')
+  sendLog('system', '══════════════════════════════════════')
+  sendLog('system', `CLI:        ${s.cliPath}`)
+  sendLog('system', `Wine:       ${effectiveWinePath}`)
+  sendLog('system', `Bottle:     ${isStandalone ? (s.standalonBottlePath || '(not set)') : (s.bottlePath || '(not set)')}`)
+  sendLog('system', `Game:       ${s.gameDir}`)
+  sendLog('system', `Mode:       ${(s.launchMode||'macos').toUpperCase()}`)
+  if (isStandalone) {
+    const dxmtActive = !!(s.standalonDxmtDir && fs.existsSync(path.join(s.standalonDxmtDir, 'dxgi.dll')))
+    sendLog('system', `Translator: DXMT (standalone WINEDLLOVERRIDES)${dxmtActive ? ' ✓' : ' — DXMT not installed, using Wine default'}`)
+  }
+  // Resolve Python interpreter — avoids ENOEXEC (-8) when Node can't exec the
+  // Python script directly (shebang interpreter missing from expected path, etc.)
+  const interp = resolveInterpreter(s.cliPath)
+  let spawnCmd, spawnArgs
+  if (interp) {
+    spawnCmd  = interp
+    spawnArgs = [s.cliPath, ...args]
+    sendLog('system', `Python:     ${interp}`)
+  } else {
+    spawnCmd  = s.cliPath
+    spawnArgs = args
+    sendLog('system', 'Python:     (direct exec — no interpreter resolved)')
+  }
+  sendLog('system', `Args:       ${args.join(' ')}`)
+  sendLog('system', '──────────────────────────────────────')
+
+  try {
+    gameProcess = spawn(spawnCmd, spawnArgs, { env })
+
+    gameProcess.stdout.on('data', d =>
+      String(d).split('\n').filter(l => l.trim()).forEach(l => sendLog('info', l, 'wine')))
+
+    gameProcess.stderr.on('data', d =>
+      String(d).split('\n').filter(l => l.trim()).forEach(l => {
+        const low = l.toLowerCase()
+        let kind = 'info'
+        if (low.includes('error') || low.includes('fatal') || low.includes('exception')) kind = 'error'
+        else if (low.includes('warn')) kind = 'warn'
+        else if (low.includes('success') || low.includes('done') || low.includes('started')) kind = 'success'
+        sendLog(kind, l, 'wine')
+        // Append a contextual hint if we recognise the error
+        if (kind === 'error' || kind === 'warn') {
+          const match = RUNTIME_HINTS.find(h => h.pat.test(low))
+          if (match) sendLog('warn', '  → ' + match.hint, 'wine')
+        }
+      }))
+
+    gameProcess.on('close', code => {
+      stopDiscordRPC()
+      if (code === 0) {
+        sendLog('success', 'Session ended normally.', 'wine')
+      } else {
+        sendLog('error', `Process exited with code ${code}.`, 'wine')
+        const hint = EXIT_HINTS[code]
+        if (hint) sendLog('warn', '  → ' + hint, 'wine')
+        else sendLog('warn', '  → Scroll up for error details, or check the truckersmp-cli documentation.', 'wine')
+      }
+      sendLog('system', '══════════════════════════════════════', 'wine')
+      mainWindow?.webContents.send('game:stopped', { code })
+      gameProcess = null
+      currentLaunchSettings = null
+    })
+
+    gameProcess.on('error', err => {
+      stopDiscordRPC()
+      let msg = `Failed to start process: ${err.message}`
+      if (err.code === 'ENOENT') msg =
+        `Command not found: ${spawnCmd}\n` +
+        `  → The Python interpreter or truckersmp-cli script could not be found.\n` +
+        `  → Reinstall: pip3 install truckersmp-cli\n` +
+        `  → Then click Re-detect in the sidebar.`
+      if (err.code === 'EACCES') msg =
+        `Permission denied: ${s.cliPath}\n` +
+        `  → Fix with: chmod +x "${s.cliPath}"`
+      if (err.code === 'ENOEXEC' || err.errno === -8) msg =
+        `Cannot execute truckersmp-cli (system error -8 / ENOEXEC).\n` +
+        `  → This means the OS cannot run the script.\n` +
+        `  → Most likely the Python interpreter in the script's shebang is missing.\n` +
+        `  → Resolved interpreter tried: ${interp || '(none found)'}\n` +
+        `  → Fix: Install Python 3 via https://python.org/downloads or brew install python3\n` +
+        `  → Then reinstall: pip3 install truckersmp-cli\n` +
+        `  → If truckersmp-cli is already installed, try: chmod +x "${s.cliPath}"`
+      sendLog('error', msg)
+      mainWindow?.webContents.send('game:stopped', { code: -1 })
+      gameProcess = null
+      currentLaunchSettings = null
+    })
 
     sendLog('success', `Process started — PID ${gameProcess.pid}`)
-
-    // ── Start Discord RPC after process is confirmed running ──
+    // ── Start Discord RPC after process is confirmed running ─────────────────
     if (s.discordIPC !== false) startDiscordRPC(
       gameProcess.pid,
       (kind, text) => sendLog(kind, text, 'launcher'),
@@ -1505,14 +1817,13 @@ ipcMain.handle('game:launch', async (_, s) => {
       {
         advanced:         !!s.rpcAdvanced,
         autoReconnect:    s.rpcAutoReconnect !== false,
-        afkEnabled:       s.afkEnabled !== false,
-        afkMinutes:       s.afkMinutes || 5,
+        afkEnabled:       s.afkEnabled       !== false,
+        afkMinutes:       s.afkMinutes       || 5,
         telemetryEnabled: !!s.telemetryEnabled,
-        telemetryPath:    s.telemetryPath || '',
+        telemetryPath:    s.telemetryPath    || '',
         ets2mpLogsDir:    s.ets2mpLogsDir,
       }
     )
-
     currentLaunchSettings = s
     return { ok:true, pid:gameProcess.pid }
   } catch(err) {
@@ -2785,7 +3096,7 @@ function standaloneWineEnv(winePath, bottlePath, extra = {}) {
   }
 }
 
-// Simple HTTPS GET that follows one redirect and returns the body Buffer
+// Simple HTTPS GET that follows redirects and returns the body Buffer.
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
     const doGet = (u, depth) => {
@@ -2793,11 +3104,29 @@ function httpsGet(url) {
       const mod = u.startsWith('https') ? require('https') : require('http')
       mod.get(u, { headers: { 'User-Agent': 'TruckersMP-Launcher' } }, res => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return doGet(res.headers.location, depth + 1)
+          res.resume()
+          return doGet(new URL(res.headers.location, u).href, depth + 1)
         }
         const chunks = []
         res.on('data', c => chunks.push(c))
-        res.on('end',  () => resolve(Buffer.concat(chunks)))
+        res.on('end', () => {
+          const body = Buffer.concat(chunks)
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            let message = ''
+            try { message = JSON.parse(body.toString()).message || '' } catch {}
+            const rateLimited = res.statusCode === 429 ||
+              (res.statusCode === 403 && (res.headers['x-ratelimit-remaining'] === '0' || /rate limit/i.test(message)))
+            if (rateLimited) {
+              const reset = Number(res.headers['x-ratelimit-reset'])
+              const retry = Number.isFinite(reset) && reset > 0
+                ? ` Try again after ${new Date(reset * 1000).toLocaleString()}.`
+                : ' Try again later.'
+              return reject(new Error(`GitHub API rate limit reached for your network.${retry}`))
+            }
+            return reject(new Error(`HTTP ${res.statusCode}${message ? ': ' + message : ''}`))
+          }
+          resolve(body)
+        })
         res.on('error', reject)
       }).on('error', reject)
     }
@@ -2853,7 +3182,9 @@ ipcMain.handle('standalone:cancelWineDownload', () => {
 // If nohero765 has NO releases → fall back and show BobTheHero6767 (Dev).
 ipcMain.handle('standalone:fetchWineRelease', async () => {
   try {
+    const fetchErrors = []
     function parseVersions(rels, extra) {
+      if (!Array.isArray(rels)) throw new Error('GitHub returned an invalid release list.')
       const out = []
       for (const rel of (Array.isArray(rels) ? rels : [])) {
         const assets = rel.assets || []
@@ -2882,15 +3213,17 @@ ipcMain.handle('standalone:fetchWineRelease', async () => {
       noheroVersions = parseVersions(JSON.parse(body.toString()), { isStable: true, isDevWine: false })
     } catch(e) {
       console.warn('[nohero fetch]', e.message)
+      fetchErrors.push(`Primary source: ${e.message}`)
     }
 
     // Fetch BobTheHero6767/testing-wine-builds (Dev)
     let wineTestVersions = []
-    try {
+    if (!noheroVersions.length) try {
       const wtBody = await httpsGet(BOB_API)
       wineTestVersions = parseVersions(JSON.parse(wtBody.toString()), { isDevWine: true, isStable: false })
     } catch(e) {
       console.warn('[bob-wine fetch]', e.message)
+      fetchErrors.push(`Fallback source: ${e.message}`)
     }
 
     // Show only nohero765 if it has releases; otherwise fall back to BobTheHero (Dev)
@@ -2899,6 +3232,7 @@ ipcMain.handle('standalone:fetchWineRelease', async () => {
     const devVersions = useNohero ? [] : wineTestVersions
 
     if (!versions.length && !devVersions.length) {
+      if (fetchErrors.length) return { ok:false, error: fetchErrors.join(' ') }
       return { ok:false, error:'No wine releases found. Check https://github.com/nohero765/wine-builds-/releases manually.' }
     }
 
@@ -3025,7 +3359,7 @@ ipcMain.handle('standalone:downloadWine', async (_, url, slug, releaseName) => {
     // Extract — do NOT use --strip-components (archive layout varies between Gcenx and YAAGL)
     mainWindow?.webContents.send('standalone:wineProgress', { phase:'extracting' })
     await new Promise((resolve, reject) => {
-      const proc = spawn('tar', ['xJf', tarPath, '-C', targetDir])
+      const proc = spawn('tar', ['xf', tarPath, '-C', targetDir])
       proc.stderr.on('data', d => console.warn('tar wine:', d.toString()))
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)))
       proc.on('error', reject)
@@ -3079,44 +3413,72 @@ ipcMain.handle('standalone:downloadWine', async (_, url, slug, releaseName) => {
   }
 })
 
-// Create a wine bottle (wineprefix) using standalone wine
+// Some custom builds omit wineusb.sys but still try to extract its INF resource.
+// That copy prompts indefinitely and prevents wineboot from reaching WoW64 setup.
+function prepareStandaloneWineSetup(wineBin) {
+  const root = path.resolve(path.dirname(wineBin), '..')
+  const infPath = path.join(root, 'share', 'wine', 'wine.inf')
+  const peDir = path.join(root, 'lib', 'wine', 'x86_64-windows')
+  if (!fs.existsSync(infPath) || !fs.existsSync(path.join(peDir, 'kernel32.dll'))) return false
+  if (fs.existsSync(path.join(peDir, 'wineusb.sys')) ||
+      fs.existsSync(path.join(root, 'lib', 'wine', 'x86_64-unix', 'wineusb.so'))) return false
+  const content = fs.readFileSync(infPath, 'utf8')
+  const patched = content.replace(/(^\[InfFiles\]\r?\n)([\s\S]*?)(?=^\[|$(?![\s\S]))/m, (section) =>
+    section.replace(/^wineusb\.inf,"@%12%\\wineusb\.sys,-1"\r?\n/gm, ''))
+  if (patched === content) return false
+  const backup = infPath + '.truckersmp-backup'
+  if (!fs.existsSync(backup)) fs.copyFileSync(infPath, backup, fs.constants.COPYFILE_EXCL)
+  fs.writeFileSync(infPath, patched, 'utf8')
+  return true
+}
+
+// Steam's 32-bit installer also needs the WoW64 files in a 64-bit bottle.
+function standaloneBottleMissingFiles(bottlePath) {
+  const required = [
+    'system.reg',
+    'drive_c/windows/system32/kernel32.dll',
+    'drive_c/windows/system32/ntdll.dll',
+    'drive_c/windows/syswow64/kernel32.dll',
+    'drive_c/windows/syswow64/ntdll.dll',
+  ]
+  return required.filter(file => !bottlePath || !fs.existsSync(path.join(bottlePath, file)))
+}
+
+// Create or update a wine bottle (wineprefix) using standalone wine.
 ipcMain.handle('standalone:createBottle', async (_, bottlePath) => {
   try {
     const wineBin = standaloneWineBin()
     if (!wineBin) return { ok:false, error:'Standalone Wine not installed. Complete Step 1 first.' }
     // Use a sensible default if caller did not provide a path
     if (!bottlePath || !bottlePath.trim()) bottlePath = path.join(SW_DIR, 'TruckersmpBottle')
+    if (prepareStandaloneWineSetup(wineBin))
+      sendLog('info', '[Wine] Skipped setup entry for wineusb.sys, which is not included in this Wine build. Original wine.inf backed up.', 'wine')
     // 1. Create the folder
     fs.mkdirSync(bottlePath, { recursive:true })
-    // 2. Run wine --init to create the bottle (wineboot under the hood)
-    const { execFileSync } = require('child_process')
-    const wineEnv = {
-      ...process.env,
-      WINEPREFIX: bottlePath,
-      WINEARCH:   'win64',
-      WINEMSYNC:  '1',
-      WINEDEBUG:  '-all',
-    }
+    // Initialize services as well as updating the files in an existing prefix.
+    // Avoid optional Mono/Gecko installers blocking prefix creation. This override
+    // applies only to wineboot; Steam and the game keep their normal DLL settings.
+    const wineEnv = standaloneWineEnv(wineBin, bottlePath, {
+      WINEARCH:'win64', WINEDLLOVERRIDES:'mscoree,mshtml=',
+    })
     try {
-      execFileSync(wineBin, ['--init'], { env: wineEnv, stdio: 'pipe', timeout: 60000 })
+      await new Promise((resolve, reject) => {
+        execFile(wineBin, ['wineboot.exe', '--init', '--update'], {
+          env: wineEnv, timeout:180000, killSignal:'SIGKILL', maxBuffer:8 * 1024 * 1024,
+        }, (err, stdout, stderr) => {
+          if (err) { err.stderr = stderr; reject(err) }
+          else resolve()
+        })
+      })
     } catch (initErr) {
-      // wine --init frequently exits non-zero because MoltenVK dumps hundreds of lines of
-      // Vulkan extension info to stderr — this is NOT a real failure.  Check whether
-      // drive_c was actually created before treating it as an error.
-      const driveC = path.join(bottlePath, 'drive_c')
-      if (!fs.existsSync(driveC)) {
-        // Strip the MoltenVK / VK_* noise and surface only the first meaningful line
-        const raw = initErr.message || String(initErr)
-        const meaningful = raw.split('\n').find(
-          l => l.trim() && !/\[mvk-info\]|VK_[A-Z_]+|Vulkan version|MoltenVK/i.test(l)
-        ) || raw.slice(0, 300)
-        return { ok: false, error: meaningful }
-      }
-      // drive_c exists → bottle was successfully initialised despite the non-zero exit
+      const raw = initErr.stderr?.toString() || initErr.message || String(initErr)
+      const lines = raw.split('\n').filter(l => l.trim() && !/\[mvk-info\]|VK_[A-Z_]+|Vulkan version|MoltenVK/i.test(l))
+      const meaningful = lines.find(l => /could not|failed|error|err:/i.test(l)) || lines[0] || raw.slice(0, 300)
+      return { ok:false, error:`Wine bottle initialization failed: ${meaningful}` }
     }
     // 3. Final verification
-    const driveC = path.join(bottlePath, 'drive_c')
-    if (!fs.existsSync(driveC)) return { ok:false, error:`drive_c not found at ${driveC}` }
+    const missing = standaloneBottleMissingFiles(bottlePath)
+    if (missing.length) return { ok:false, error:`Wine bottle is incomplete. Missing: ${missing.join(', ')}. The Wine build must support both 64-bit and 32-bit Windows programs.` }
     return { ok:true, bottlePath }
   } catch(e) {
     return { ok:false, error: e.message }
@@ -3160,28 +3522,41 @@ ipcMain.handle('standalone:runExe', async (_, { exePath, bottlePath }) => {
     const wineBin = standaloneWineBin()
     if (!wineBin) return { ok:false, error:'Standalone Wine not installed.' }
     if (!fs.existsSync(exePath)) return { ok:false, error:`Installer not found: ${exePath}` }
+    if (standaloneBottleMissingFiles(bottlePath).length)
+      return { ok:false, error:'Wine bottle is incomplete. Run Create Bottle & Launch Steam to initialize or repair its Windows files first.' }
 
-    const env = {
-      ...process.env,
-      WINEPREFIX: bottlePath,
-      WINEDEBUG: '-all',
-      WINEMSYNC: '1'
-    }
+    const env = standaloneWineEnv(wineBin, bottlePath, { WINEDEBUG:'err+all' })
+    fs.mkdirSync(SW_DIR, { recursive:true })
+    const logPath = path.join(SW_DIR, 'steam-installer.log')
+    const logFd = fs.openSync(logPath, 'w')
 
     return await new Promise(resolve => {
-      const child = spawn(wineBin, [exePath], {
-        env,
-        detached: true,
-        stdio: 'ignore'
-      })
+      let child
+      try {
+        child = spawn(wineBin, [exePath], { env, detached:true, stdio:['ignore', logFd, logFd] })
+      } finally {
+        fs.closeSync(logFd)
+      }
+      let startupTimer
 
       child.once('error', err => {
+        clearTimeout(startupTimer)
         resolve({ ok:false, error: `Failed to launch Wine: ${err.message}` })
       })
 
       child.once('spawn', () => {
         child.unref()
-        resolve({ ok:true })
+        startupTimer = setTimeout(() => resolve({ ok:true, logPath }), 1500)
+      })
+      child.once('exit', (code, signal) => {
+        clearTimeout(startupTimer)
+        if (code !== 0) {
+          const error = `Steam installer exited ${signal ? 'with signal ' + signal : 'with code ' + code}. See ${logPath}`
+          sendLog('error', error, 'wine')
+          resolve({ ok:false, error })
+        } else {
+          resolve({ ok:true, logPath })
+        }
       })
     })
   } catch(e) {
@@ -3532,7 +3907,7 @@ ipcMain.handle('standalone:getStatus', () => {
     activeSlug:     s.standalonWineSlug || '',
     defaultBottlePath: path.join(SW_DIR, 'TruckersmpBottle'),
     bottlePath:     s.standalonBottlePath || '',
-    bottleExists:   !!(s.standalonBottlePath && fs.existsSync(path.join(s.standalonBottlePath, 'drive_c'))),
+    bottleExists:   standaloneBottleMissingFiles(s.standalonBottlePath).length === 0,
     dxmtDir:        s.standalonDxmtDir || '',
     dxmtExists:     !!(s.standalonDxmtDir && fs.existsSync(path.join(s.standalonDxmtDir, 'dxgi.dll'))),
     dxmtVersion,
@@ -3553,7 +3928,7 @@ ipcMain.handle('standalone:autoDetectGamePath', (_, bottlePath) => {
     path.join(bottlePath, 'drive_c', 'Program Files', 'Steam', 'steamapps', 'common', 'Euro Truck Simulator 2'),
   ]
   for (const p of candidates) {
-    if (fs.existsSync(p)) return { ok:true, gameDir: p }
+    if (fs.existsSync(path.join(p, 'bin', 'win_x64', 'eurotrucks2.exe'))) return { ok:true, gameDir: p }
   }
   return { ok:false, error:'ETS2 not found — make sure Steam has finished installing it.' }
 })
