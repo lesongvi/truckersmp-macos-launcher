@@ -14,15 +14,6 @@ A macOS launcher for [TruckersMP](https://truckersmp.com) the ETS2 multiplayer m
 
 ---
 
-> [!IMPORTANT]
-> I’m currently rebuilding the entire app from the ground up as a native **Swift application**. Because of this, I won’t be releasing any more updates for the Electron build for now.
->
-> Any bugs, missing features, or broken stuff in the Electron version will be fixed in the new Swift version instead.
->
-> You can still report any issues you find though. It helps me make sure I don’t miss anything while working on **v3.0 Stable**.
-
----
-
 Need a video tutorial? Here! ↴  
 <a href="https://www.youtube.com/watch?v=zh7L3ah6Bvo">
 <img src="imageyt.jpg" alt="TruckersMP on Apple Silicon" width="190">
@@ -124,11 +115,46 @@ To remove the app and its saved setup, delete these locations:
 
 ---
 
-## Contributing
+## Development
 
-PRs and issues welcome. If you hit a crash or a path detection failure, please open an issue and include the contents of the collapsed Log section.
+Use Node.js 22.12 or newer for packaging (required by the current Electron build tools).
 
----
+```bash
+npm ci
+npm start
+npm test
+npm run format:check
+npm run build
+```
+
+`npm start` and the build commands compile EJS templates automatically. Edit `src/views/index.ejs` and its partials, then use `npm run ui:build` to regenerate `src/index.html` when needed. The HTML file is generated output. EJS runs only during this build step; it is not evaluated in the Electron renderer.
+
+| Location                                                   | Responsibility                                            |
+| ---------------------------------------------------------- | --------------------------------------------------------- |
+| `main.js`                                                  | Electron entry point                                      |
+| `src/main/index.js`                                        | Window lifecycle and service wiring                       |
+| `src/main/game.js`, `steam.js`                             | Game and Steam sessions                                   |
+| `src/main/wine.js`, `wine-graphics.js`                     | Wine paths, environment, bottle checks and graphics setup |
+| `src/main/wine-install.js`, `bottle.js`, `dxmt-install.js` | Setup wizard operations                                   |
+| `src/main/companions.js`                                   | HaulLog and native TruckerSVN integration                 |
+| `src/renderer/`                                            | UI controllers, state, logging, settings and setup wizard |
+| `src/views/`                                               | EJS layout and reusable UI partials                       |
+| `preload.js`                                               | Supported IPC requests and events                         |
+| `tests/`                                                   | Module tests, UI state tests and IPC/template checks      |
+
+The inactive Discord RPC, telemetry, events, player search, launcher updater, legacy Wine selection, and arbitrary Wine command endpoints have been removed. Stopping a game cleans up its selected Wine bottle; it does not run system-wide process-kill commands.
+
+### Wine CLI compatibility
+
+The pinned custom Wine build omits `winedbg.exe`, which `truckersmp-cli` normally uses to check whether Steam is running. `src/cli-wine.js` selects the executable adapter in `src/compat/wine-cli.sh` when that debugger is absent. The adapter answers only the process-list request using `tasklist.exe`; all other arguments go to the selected Wine binary unchanged. The installed Python package is not patched.
+
+The adapter must be executable and reside outside `app.asar`. The Electron builder configuration unpacks `src/compat/**` automatically. Tests cover process-list parsing, normal argument forwarding, failure propagation and packaging.
+
+### Validation
+
+Tests import controller/service exports directly. The preload contract test checks that every exposed request has a registered backend handler. UI templates are checked for duplicate IDs and unresolved EJS tags. Tests that exercise the native Tool API use a local loopback server.
+
+PRs and issues welcome. For launch failures, include the relevant entries from the collapsed Log section.
 
 ## Acknowledgements
 
@@ -145,7 +171,6 @@ this project uses the following tools:
 - **[CodeWeavers/CrossOver](https://www.codeweavers.com/crossover)** — This project's custom Wine build Uses CodeWeavers' CrossOver patches. Thank you for their years of upstream Wine contributions.
 - **[DXMT](https://github.com/3Shain/dxmt)** — DirectX to Metal translation layer used in place of D3DMetal.
 - **[truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli)** — Used to launch TruckersMP and install TMP files.
-- **[Funbit ETS2 Telemetry Server](https://github.com/Funbit/ets2-telemetry-server)** — Used for Telemetry Tab and exact coordinates of the truck/car
 
 a big thank you for these developers who developed these tools the project wouldn't have been possible without their hard work.
 

@@ -2,19 +2,27 @@
   "name": "truckersmp-launcher",
   "productName": "TruckersMP for macOS",
   "version": "2.0.0-beta",
-  "description": "macOS GUI launcher for TruckersMP via truckersmp-cli + CrossOver",
+  "description": "Compact macOS launcher for TruckersMP with standalone Wine or CrossOver",
   "author": "nohero765",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --mac --arm64",
-    "build:x64": "electron-builder --mac --x64"
+    "build:x64": "electron-builder --mac --x64",
+    "ui:build": "node scripts/build-ui.js",
+    "prestart": "npm run ui:build",
+    "prebuild": "npm run ui:build",
+    "prebuild:x64": "npm run ui:build",
+    "test": "node --test tests/*.test.js",
+    "format": "prettier --write main.js preload.js scripts src tests README.md",
+    "format:check": "prettier --check main.js preload.js scripts src tests README.md"
   },
   "devDependencies": {
     "ejs": "3.1.10",
     "electron": "^29.4.6",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "prettier": "3.6.2"
   },
   "build": {
     "appId": "com.nohero.truckersmp-launcher",
@@ -46,10 +54,14 @@
       "icon.png",
       "src/**/*",
       "!src/.DS_Store",
-      "!**/.DS_Store"
+      "!**/.DS_Store",
+      "!src/views/**"
     ],
     "extraMetadata": {
       "version": "2.0.0-beta"
-    }
+    },
+    "asarUnpack": [
+      "src/compat/**"
+    ]
   }
 }

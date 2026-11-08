@@ -9,5 +9,5 @@ module.exports = Object.freeze({
   major: 11,
   minor: 11,
   isPinned: true,
-  isDevWine: true,
+  isDevWine: true
 })

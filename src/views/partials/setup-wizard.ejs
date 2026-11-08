@@ -1,0 +1,138 @@
+<!-- STANDALONE WINE SETUP WIZARD -->
+<div id="sw-wizard" class="sw-overlay hidden">
+  <div class="sw-box">
+    <div class="sw-header">
+      <div class="sw-title">Standalone setup</div><button class="icon-button" id="sw-close-wizard" aria-label="Close setup">×</button>
+      <div class="sw-subtitle">Set up integrated Wine, a bottle, Steam, and DXMT — no CrossOver needed.</div>
+      <div class="sw-steps" style="margin-top:16px;margin-bottom:16px">
+        <div class="sw-step-dot active" id="swdot-1">
+          <div class="sw-dot-circle">1</div>
+          <div class="sw-dot-label">Wine</div>
+        </div>
+        <div class="sw-step-dot" id="swdot-2">
+          <div class="sw-dot-circle">2</div>
+          <div class="sw-dot-label">Bottle &amp; Steam</div>
+        </div>
+        <div class="sw-step-dot" id="swdot-3">
+          <div class="sw-dot-circle">3</div>
+          <div class="sw-dot-label">DXMT</div>
+        </div>
+        <div class="sw-step-dot" id="swdot-4">
+          <div class="sw-dot-circle">4</div>
+          <div class="sw-dot-label">Done</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sw-body">
+
+      <!-- Step 1: Download Wine -->
+      <div class="sw-step-panel active" id="swp-1">
+        <div class="sw-step-title">Step 1 — Download Wine</div>
+        <div class="sw-desc" id="sw-step1-desc">This project uses Wine 11.11. Download &amp; Install sets up the pinned build.</div>
+        <div class="sw-info-row" id="sw-wine-release-info">
+          <span style="color:var(--text-secondary)">Wine 11.11 is pinned for this project.</span>
+        </div>
+        <div class="sw-progress-wrap" id="sw-wine-prog-wrap">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="sw-progress-label" id="sw-wine-prog-label">Downloading…</div>
+            <button id="sw-cancel-wine-dl" class="sw-btn-ghost" style="padding:1px 8px;font-size:11px;color:#f87171;border-color:rgba(248,113,113,0.4)">✕ Cancel</button>
+          </div>
+          <div class="sw-progress-bar"><div class="sw-progress-fill" id="sw-wine-prog-fill"></div></div>
+        </div>
+        <div class="sw-error" id="sw-wine-err"></div>
+        <div class="sw-actions" style="flex-wrap:wrap;gap:8px">
+          <button class="sw-btn-ghost" id="sw-close-1">Close</button>
+          <button class="sw-btn-ghost" id="sw-skip-wine" style="color:var(--green);border-color:var(--green)">Already installed → Skip</button>
+          <button class="sw-btn" id="sw-dl-wine">Download &amp; Install Wine</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Bottle + Steam -->
+      <div class="sw-step-panel" id="swp-2">
+        <div class="sw-step-title">Step 2 — Create Bottle &amp; Install Steam</div>
+        <div class="sw-desc">
+          Choose where to create your Wine bottle, then the app will initialise it and
+          download <strong>SteamSetup.exe</strong> and run it inside the bottle.
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:12px">
+          If no bottle location is given, the bottle will be created at
+          <code style="font-size:10px;background:rgba(235,235,245,0.06);padding:1px 4px;border-radius:3px;color:var(--text-secondary)">~/Library/Application Support/TruckersMP-Launcher/TruckersmpBottle</code>
+          <br/>
+          <span style="color:var(--text-secondary)">⏳ Please wait for Steam setup to fully finish</span> before proceeding to the next step.
+        </div>
+        <div class="s-field" style="margin-bottom:14px">
+          <label class="s-label" style="font-size:11.5px;margin-bottom:4px">Bottle location</label>
+          <div class="sw-path-row">
+            <input class="s-input" id="sw-wiz-bottle" spellcheck="false"/>
+            <button class="s-browse" data-target="sw-wiz-bottle" data-folder="true">Browse</button>
+          </div>
+        </div>
+        <div class="sw-progress-wrap" id="sw-steam-prog-wrap">
+          <div class="sw-progress-label" id="sw-steam-prog-label">Downloading Steam…</div>
+          <div class="sw-progress-bar"><div class="sw-progress-fill" id="sw-steam-prog-fill"></div></div>
+        </div>
+        <div class="sw-error" id="sw-bottle-err"></div>
+        <div class="sw-actions">
+          <button class="sw-btn-ghost" id="sw-back-2">← Back</button>
+          <button class="sw-btn-ghost" id="sw-skip-2" style="color:var(--green);border-color:var(--green)">Already done → Skip</button>
+          <button class="sw-btn" id="sw-create-bottle">Create Bottle &amp; Launch Steam</button>
+          <button class="sw-btn" id="sw-next-2" style="display:none">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: DXMT -->
+      <div class="sw-step-panel" id="swp-3">
+        <div class="sw-step-title">Step 3 — Install DXMT</div>
+        <div class="sw-desc">
+          Download the latest DXMT release from
+          <a href="https://github.com/3Shain/dxmt" target="_blank" style="color:var(--accent);text-decoration:none">github.com/3Shain/dxmt</a> — grab the
+          <code>.tar.gz</code> file. Then drop it below or browse to it.
+          The app will extract it and wire it up automatically.
+        </div>
+        <div style="margin-bottom:14px">
+          <button class="sw-btn" id="sw-auto-install-dxmt" style="width:100%;margin-bottom:6px">⬇ Auto-install latest DXMT from GitHub</button>
+          <div id="sw-dxmt-auto-status" style="font-size:11px;color:var(--text-secondary);text-align:center;min-height:16px"></div>
+        </div>
+        <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.2);margin-bottom:14px;letter-spacing:0.5px">— or install from file manually —</div>
+        <div class="s-field" style="margin-bottom:14px">
+          <label class="s-label" style="font-size:11.5px;margin-bottom:4px">DXMT .tar.gz archive</label>
+          <div class="sw-path-row">
+            <input class="s-input" id="sw-wiz-dxmt" placeholder="Drop .tar.gz here or browse…" spellcheck="false"/>
+            <button class="s-browse" data-target="sw-wiz-dxmt" data-folder="false">Browse</button>
+          </div>
+        </div>
+        <div class="sw-error" id="sw-dxmt-err"></div>
+        <div class="sw-actions">
+          <button class="sw-btn-ghost" id="sw-back-3">← Back</button>
+          <button class="sw-btn-ghost" id="sw-skip-dxmt">Skip for now</button>
+          <button class="sw-btn" id="sw-install-dxmt">Install DXMT →</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Done -->
+      <div class="sw-step-panel" id="swp-4">
+        <div class="sw-step-title">Setup Complete!</div>
+        <div class="sw-desc">
+          Standalone Wine and your bottle are ready.
+        </div>
+        <div class="sw-warn" style="margin-bottom:14px">
+          <strong>Install ETS2:</strong> Open Steam inside the bottle and install
+          <strong>Euro Truck Simulator 2</strong> through it. The launcher will detect
+          the game directory automatically when you launch.
+        </div>
+        <div class="s-field">
+          <label class="s-label" style="font-size:11.5px;margin-bottom:4px">Steam directory inside bottle <span style="color:var(--text-muted);font-weight:400">(auto-detected if blank)</span></label>
+          <div class="sw-path-row">
+            <input class="s-input" id="sw-wiz-steam" placeholder="…/drive_c/Program Files (x86)/Steam" spellcheck="false"/>
+            <button class="s-browse" data-target="sw-wiz-steam" data-folder="true">Browse</button>
+          </div>
+        </div>
+        <div class="sw-actions">
+          <button class="sw-btn" id="sw-finish">Finish &amp; Close</button>
+        </div>
+      </div>
+
+    </div><!-- /.sw-body -->
+  </div>
+</div>

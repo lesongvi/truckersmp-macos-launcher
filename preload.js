@@ -1,78 +1,58 @@
 const { contextBridge, ipcRenderer } = require('electron')
-contextBridge.exposeInMainWorld('api', {
-  loadSettings:           ()  => ipcRenderer.invoke('settings:load'),
-  saveSettings:           (s) => ipcRenderer.invoke('settings:save', s),
-  deleteSettings:         ()  => ipcRenderer.invoke('settings:delete'),
-  detectPaths:            ()  => ipcRenderer.invoke('settings:detect'),
-  browse:       (opts)        => ipcRenderer.invoke('dialog:browse', opts),
-  pathExists:   (p)           => ipcRenderer.invoke('fs:exists', p),
-  revealInFinder:(p)          => ipcRenderer.invoke('shell:reveal', p),
-  launchGame:   (s)           => ipcRenderer.invoke('game:launch', s),
-  startSteam:   (s)           => ipcRenderer.invoke('game:startSteam', s),
-  stopSteam:    (s)           => ipcRenderer.invoke('game:stopSteam', s),
-  getSteamStatus:(s)          => ipcRenderer.invoke('game:steamStatus', s),
-  getHaulLogStatus:(s)        => ipcRenderer.invoke('haullog:status', s),
-  installHaulLog:(s)          => ipcRenderer.invoke('haullog:install', s),
-  openHaulLog:   (s)          => ipcRenderer.invoke('haullog:open', s),
-  onHaulLogProgress:(cb) => { ipcRenderer.removeAllListeners('haullog:progress'); ipcRenderer.on('haullog:progress', (_, data) => cb(data)) },
-  getTruckerSVNStatus:(s)     => ipcRenderer.invoke('truckersvn:status', s),
-  installTruckerSVN:(s)      => ipcRenderer.invoke('truckersvn:install', s),
-  openTruckerSVN: (s)        => ipcRenderer.invoke('truckersvn:open', s),
-  onTruckerSVNProgress:(cb) => { ipcRenderer.removeAllListeners('truckersvn:progress'); ipcRenderer.on('truckersvn:progress', (_, data) => cb(data)) },
-  launchWinecfg:   (s)        => ipcRenderer.invoke('game:launchWinecfg', s),
-  listWineProcesses: ()       => ipcRenderer.invoke('wine:listProcesses'),
-  runWineCommand:  (cmd, s)   => ipcRenderer.invoke('wine:runCommand', { cmd, s }),
-  diagnoseWine:    (s)        => ipcRenderer.invoke('wine:diagnose', s),
-  killAllWine:     (s)        => ipcRenderer.invoke('wine:killAll', s),
-  killWineProcess: (pid)      => ipcRenderer.invoke('wine:killProcess', pid),
-  stopGame:     ()            => ipcRenderer.invoke('game:stop'),
-  forceStopGame:()            => ipcRenderer.invoke('game:forceStop'),
-  getTMPServers:()            => ipcRenderer.invoke('servers:status'),
-  getTMPInfo:   ()            => ipcRenderer.invoke('tmp:info'),
-  getTMPEvents: ()            => ipcRenderer.invoke('tmp:events'),
-  lookupPlayer: (id)          => ipcRenderer.invoke('player:lookup', id),
-  checkTMPPort: ()            => ipcRenderer.invoke('net:checkTMP'),
-  testRPC:      (s)           => ipcRenderer.invoke('discord:test', s),
-  setPauseOnBlur:(enabled)    => ipcRenderer.invoke('app:setPauseOnBlur', !!enabled),
-  getTrucksmpCliVersion: ()   => ipcRenderer.invoke('tools:trucksmpCliVersion'),
-  detectEts2mpLogsDir: ()     => ipcRenderer.invoke('ets2mp:detectLogsDir'),
-  pickEts2mpLogsDir:   ()     => ipcRenderer.invoke('ets2mp:pickLogsDir'),
-  forceWatchChatLog:   ()     => ipcRenderer.invoke('ets2mp:forceWatch'),
-  getRpcStatus:        ()     => ipcRenderer.invoke('rpc:getStatus'),
-  applyRpcOptions:     (opts) => ipcRenderer.invoke('rpc:applyOptions', opts),
-  onLog:         (cb) => { ipcRenderer.removeAllListeners('log:line');          ipcRenderer.on('log:line',          (_, d) => cb(d)) },
-  onGameStopped: (cb) => { ipcRenderer.removeAllListeners('game:stopped');      ipcRenderer.on('game:stopped',      (_, d) => cb(d)) },
-  onSteamStopped:(cb) => { ipcRenderer.removeAllListeners('steam:stopped');     ipcRenderer.on('steam:stopped',     () => cb()) },
-  onSteamRestarting:(cb)=>{ ipcRenderer.removeAllListeners('steam:restarting'); ipcRenderer.on('steam:restarting',  () => cb()) },
-  onSteamReady:  (cb) => { ipcRenderer.removeAllListeners('steam:ready');       ipcRenderer.on('steam:ready',       () => cb()) },
-  onEts2mpNeedsLogsDir:(cb)=>{ ipcRenderer.removeAllListeners('ets2mp:needsLogsDir'); ipcRenderer.on('ets2mp:needsLogsDir', () => cb()) },
-  onRpcStatus:   (cb) => { ipcRenderer.removeAllListeners('rpc:status');        ipcRenderer.on('rpc:status',        (_, d) => cb(d)) },
-  // Standalone Wine wizard
-  swFetchWineRelease: ()           => ipcRenderer.invoke('standalone:fetchWineRelease'),
-  swDownloadWine:  (url, slug, releaseName) => ipcRenderer.invoke('standalone:downloadWine', url, slug, releaseName),
-  swCancelWineDownload: ()           => ipcRenderer.invoke('standalone:cancelWineDownload'),
-  swDeleteWine:       (slug)       => ipcRenderer.invoke('standalone:deleteWine', slug),
-  swListWines:        ()           => ipcRenderer.invoke('standalone:listWines'),
-  swSetActiveWine:    (slug)       => ipcRenderer.invoke('standalone:setActiveWine', slug),
-  swCreateBottle:          (p)    => ipcRenderer.invoke('standalone:createBottle', p),
-  swAutoDetectGamePath:    (p)    => ipcRenderer.invoke('standalone:autoDetectGamePath', p),
-  swAutoDetectSteamPath:   (p)    => ipcRenderer.invoke('standalone:autoDetectSteamPath', p),
-  openInFinder:            (p)    => ipcRenderer.invoke('shell:openInFinder', p),
-  swDownloadSteam:    ()           => ipcRenderer.invoke('standalone:downloadSteam'),
-  swRunExe:           (o)          => ipcRenderer.invoke('standalone:runExe', o),
-  swInstallDxmt:      (p)          => ipcRenderer.invoke('standalone:installDxmt', p),
-  swAutoInstallDxmt:  ()           => ipcRenderer.invoke('standalone:autoInstallDxmt'),
-  swGetStatus:        ()           => ipcRenderer.invoke('standalone:getStatus'),
-  swKillWineserver:   (p)          => ipcRenderer.invoke('standalone:killWineserver', p),
-  swSetRetinaMode:    (bottlePath, enabled) => ipcRenderer.invoke('standalone:setRetinaMode', { bottlePath, enabled }),
-  swReadSteamLog:     ()           => ipcRenderer.invoke('standalone:readSteamLog'),
-  swOpenSteamLog:     ()           => ipcRenderer.invoke('standalone:openSteamLog'),
-  clearSteamHtmlCache: (p)        => ipcRenderer.invoke('steam:clearHtmlCache', p),
-  checkUpdate:        ()           => ipcRenderer.invoke('app:checkUpdate'),
-  downloadUpdate:     (url)        => ipcRenderer.invoke('app:downloadUpdate', url),
-  cancelUpdate:       ()           => ipcRenderer.invoke('app:cancelUpdate'),
-  onUpdateProgress:(cb) => { ipcRenderer.removeAllListeners('app:updateProgress'); ipcRenderer.on('app:updateProgress', (_, d) => cb(d)) },
-  onWineProgress:(cb) => { ipcRenderer.removeAllListeners('standalone:wineProgress');  ipcRenderer.on('standalone:wineProgress',  (_, d) => cb(d)) },
-  onSteamProgress:(cb)=>{ ipcRenderer.removeAllListeners('standalone:steamProgress'); ipcRenderer.on('standalone:steamProgress', (_, d) => cb(d)) },
-  onDxmtStatus:  (cb) => { ipcRenderer.removeAllListeners('standalone:dxmtStatus');   ipcRenderer.on('standalone:dxmtStatus',    (_, d) => cb(d)) },
-})
+
+const requests = {
+  loadSettings: 'settings:load',
+  saveSettings: 'settings:save',
+  detectPaths: 'settings:detect',
+  browse: 'dialog:browse',
+  pathExists: 'fs:exists',
+  launchGame: 'game:launch',
+  stopGame: 'game:stop',
+  startSteam: 'game:startSteam',
+  stopSteam: 'game:stopSteam',
+  getSteamStatus: 'game:steamStatus',
+  getHaulLogStatus: 'haullog:status',
+  installHaulLog: 'haullog:install',
+  getTruckerSVNStatus: 'truckersvn:status',
+  installTruckerSVN: 'truckersvn:install',
+  openTruckerSVN: 'truckersvn:open',
+  swFetchWineRelease: 'standalone:fetchWineRelease',
+  swDownloadWine: 'standalone:downloadWine',
+  swCancelWineDownload: 'standalone:cancelWineDownload',
+  swCreateBottle: 'standalone:createBottle',
+  swDownloadSteam: 'standalone:downloadSteam',
+  swRunExe: 'standalone:runExe',
+  swAutoDetectGamePath: 'standalone:autoDetectGamePath',
+  swAutoDetectSteamPath: 'standalone:autoDetectSteamPath',
+  swInstallDxmt: 'standalone:installDxmt',
+  swAutoInstallDxmt: 'standalone:autoInstallDxmt',
+  swGetStatus: 'standalone:getStatus'
+}
+const events = {
+  onLog: 'log:line',
+  onGameStopped: 'game:stopped',
+  onSteamStopped: 'steam:stopped',
+  onSteamRestarting: 'steam:restarting',
+  onSteamReady: 'steam:ready',
+  onHaulLogProgress: 'haullog:progress',
+  onTruckerSVNProgress: 'truckersvn:progress',
+  onWineProgress: 'standalone:wineProgress',
+  onSteamProgress: 'standalone:steamProgress',
+  onDxmtStatus: 'standalone:dxmtStatus'
+}
+const api = Object.fromEntries(
+  Object.entries(requests).map(([name, channel]) => [
+    name,
+    (...args) => ipcRenderer.invoke(channel, ...args)
+  ])
+)
+api.swSetRetinaMode = (bottlePath, enabled) =>
+  ipcRenderer.invoke('standalone:setRetinaMode', { bottlePath, enabled })
+for (const [name, channel] of Object.entries(events)) {
+  api[name] = (callback) => {
+    const listener = (_, value) => callback(value)
+    ipcRenderer.on(channel, listener)
+    return () => ipcRenderer.removeListener(channel, listener)
+  }
+}
+contextBridge.exposeInMainWorld('api', api)

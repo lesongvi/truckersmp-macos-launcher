@@ -1,0 +1,54 @@
+<main class="launcher">
+  <header class="app-header">
+    <div class="app-brand"><img src="logo-dark.png" alt=""/><div><h1>TruckersMP</h1><span>for macOS</span></div></div>
+    <button class="button-subtle" id="btn-header-settings">Settings</button>
+  </header>
+
+  <div class="status-row" role="status" aria-live="polite">
+    <span class="status-dot idle" id="status-dot"></span>
+    <span id="status-label">Idle</span><span id="status-pid"></span>
+  </div>
+
+  <section class="launch-controls" aria-label="Game launch">
+    <div class="card-wine-toggle" role="group" aria-label="Wine mode">
+      <button class="card-wine-btn" id="cwt-cx" aria-pressed="false">CrossOver</button>
+      <button class="card-wine-btn" id="cwt-sw" aria-pressed="false">Standalone</button>
+    </div>
+    <div class="wine-card-badge hidden" id="wine-card-badge"></div>
+    <div class="wine-options">
+      <label><input type="checkbox" id="s-retina-mode"/> Retina</label>
+      <label><input type="checkbox" id="s-metal-hud-sw"/> Metal HUD</label>
+    </div>
+    <button class="btn-steam" id="btn-steam" disabled>Start Steam</button>
+    <button class="btn-launch" id="btn-launch" disabled>Launch ETS2 MP</button>
+    <div class="game-startup hidden" id="game-startup" role="status" aria-live="polite">
+      <p id="game-startup-text"></p>
+      <button class="button-subtle" id="btn-startup-log">View log below ↓</button>
+    </div>
+    <p class="launch-warn hidden" id="launch-warn"></p>
+    <div class="companion-actions">
+      <button class="button-secondary" id="btn-haullog-install" disabled>Install HaulLog</button>
+      <button class="button-secondary" id="btn-truckersvn" disabled>Install TruckerSVN Tool</button>
+    </div>
+    <div class="haullog-progress hidden" id="haullog-progress" role="progressbar" aria-label="HaulLog download" aria-valuemin="0" aria-valuemax="100"><div id="haullog-progress-fill"></div></div>
+    <p class="inline-message hidden" id="haullog-message" role="status" aria-live="polite"></p>
+    <p class="inline-message hidden" id="truckersvn-message" role="status" aria-live="polite"></p>
+    <p class="inline-message hidden" id="action-message" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="detection" aria-label="Detection status">
+    <div class="section-heading"><h2>Detection</h2><button class="button-subtle" id="btn-detect">Re-detect</button></div>
+    <div class="det-row"><span id="det-label-wine">Wine</span><span class="det-badge" id="badge-crossover">Checking…</span></div>
+    <div class="det-row"><span>truckersmp-cli</span><span class="det-badge" id="badge-cli">Checking…</span></div>
+    <div class="det-row"><span>Steam</span><span class="det-badge" id="badge-steam">Checking…</span></div>
+    <div class="det-row"><span>ETS2</span><span class="det-badge" id="badge-game">Checking…</span></div>
+    <div class="det-row"><span>HaulLog</span><span class="det-badge" id="badge-haullog">Checking…</span></div>
+    <div class="det-row"><span>TruckerSVN Tool</span><span class="det-badge" id="badge-truckersvn">Checking…</span></div>
+  </section>
+
+  <details class="log-details" id="log-details">
+    <summary>Log</summary>
+    <div class="log-actions"><button class="button-subtle" id="btn-clear-log">Clear log</button></div>
+    <pre id="log-body" aria-label="Launcher log"></pre>
+  </details>
+</main>
