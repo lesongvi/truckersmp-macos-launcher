@@ -1,185 +1,161 @@
 # TruckersMP for macOS
 
-![Latest Release](https://img.shields.io/github/v/release/nohero765/truckersmp-macos)
-![License](https://img.shields.io/github/license/nohero765/truckersmp-macos)
-![GitHub Stars](https://img.shields.io/github/stars/nohero765/truckersmp-macos)
+An unofficial Electron launcher for playing Euro Truck Simulator 2 multiplayer through [TruckersMP](https://truckersmp.com) on macOS. It uses [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) to launch multiplayer and runs the Windows game through either standalone Wine or CrossOver.
 
-A macOS launcher for [TruckersMP](https://truckersmp.com) the ETS2 multiplayer mod, built with Electron. Under the hood it wraps [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) and can either use **CrossOver Wine** or a fully self-contained **Standalone Wine** build to launch the game.
+This repository continues an inherited launcher project. This README describes the implementation in this checkout; instructions and release information from deprecated repositories may differ.
 
-> **Beta release (v2.4.1 Beta) — things are subject to change.**
+## What the launcher does
 
-<p align="center">
-  <img src="icon.png" width="128" alt="App Icon">
-</p>
+- Detects Wine, truckersmp-cli, Steam, ETS2, and optional companion tools.
+- Sets up standalone Wine, a Windows bottle, Steam, and DXMT.
+- Starts and stops Steam and ETS2 multiplayer in the selected bottle.
+- Provides Retina and Metal HUD controls, editable paths, and a troubleshooting log.
+- Installs HaulLog and installs or opens the native macOS TruckerSVN Tool.
 
----
+A bottle is a directory containing a Wine Windows environment, including its installed applications and settings. Steam and ETS2 must be installed in the bottle selected in the launcher.
 
-Need a video tutorial? Here! ↴  
-<a href="https://www.youtube.com/watch?v=zh7L3ah6Bvo">
-<img src="imageyt.jpg" alt="TruckersMP on Apple Silicon" width="190">
-</a>
+## Before you start
 
----
+You will need:
 
-## Compact launcher
+- A Mac capable of running your chosen Wine and graphics setup. Apple Silicon is the primary target; the default app build targets arm64.
+- A Steam account with Euro Truck Simulator 2 and a TruckersMP account.
+- The Windows version of Steam and ETS2 installed in your Wine bottle.
+- Python 3 and truckersmp-cli.
+- Either the standalone Wine setup managed by the launcher or an existing CrossOver installation.
 
-The main window contains the essentials:
+Install truckersmp-cli in your preferred Python environment:
 
-- Game status and detection for Wine, truckersmp-cli, Steam, ETS2, HaulLog, and TruckerSVN Tool. Installed companion versions appear in Detection; unavailable version information is marked explicitly.
-- CrossOver / Standalone selection, Retina, and Metal HUD.
-- Start / Stop Steam, Launch / Stop ETS2 MP, Install HaulLog, and Install / Open native macOS TruckerSVN Tool.
-- Re-detect, a small Settings dialog for paths, and a collapsed troubleshooting log.
+```sh
+python3 -m pip install truckersmp-cli
+```
 
-Standalone Wine is pinned to **11.11**. The exact archive and SHA-256 are defined in [`src/wine-release.js`](src/wine-release.js). Other standalone builds are not selected as fallbacks.
+If your Python installation requires an isolated environment, use a virtual environment or pipx. Set the path to the resulting `truckersmp-cli` executable in the launcher's **Settings** if automatic detection does not find it.
 
-## Requirements
+The macOS version of ETS2 and native Steam do not replace the Windows installations inside Wine. Game compatibility also depends on the versions supported by TruckersMP and the selected Wine/graphics stack.
 
-| Dependency                                                                                                | Notes                                                                      |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Apple Silicon Mac                                                                                         | Required for [DXMT](https://github.com/3Shain/dxmt)                        |
-| [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli)                                        | Install via `pip3 install truckersmp-cli`                                  |
-| Euro Truck Simulator 2                                                                                    | Must be installed via Steam inside a Wine bottle                           |
-| **Either:** [CrossOver](https://www.codeweavers.com/crossover) (free trial available) **or nothing else** | Standalone manages its own Wine build — no CrossOver purchase/trial needed |
-
-> [!WARNING]
-> This app supports **macOS Sequoia and above**. **macOS Sonoma** may work but isn't guaranteed Older versions are not supported.
-
-> As of [DXMT 0.72](https://github.com/3Shain/dxmt/releases#release-v0.72), experimental Intel Mac support was added — Apple Silicon is still recommended, but Intel Macs may work.
-
-> Standalone Wine mode is pinned to **Wine development 11.11**. Other standalone Wine builds cannot be installed or selected, and the launcher will not fall back to them if 11.11 is missing.
-
----
-
-## Setup
+## Set up and play
 
 ### Standalone Wine
 
-1. Select **Standalone** on the main screen.
-2. Open **Settings → Open setup wizard** to install Wine 11.11, initialize the bottle, and install DXMT.
-3. Start Steam, sign in, and install the Windows version of ETS2 inside that bottle.
-4. Click **Re-detect**, then **Launch ETS2 MP**.
+This mode does not require CrossOver. It uses the custom Wine development **11.11** build pinned in [src/wine-release.js](src/wine-release.js), including its download URL and SHA-256 checksum. The launcher does not select another Wine build as a fallback.
+
+1. Select **Standalone** in the main window.
+2. Open **Settings → Open setup wizard**.
+3. Download and install Wine, then create a bottle and finish the Windows Steam installer.
+4. Install DXMT through the wizard, either automatically from GitHub or from a downloaded archive.
+5. Start Steam, sign in, and install the Windows version of ETS2 in that bottle.
+6. Return to the launcher and click **Re-detect**. Check the detected paths in **Settings** and use **Save paths** after any changes.
+7. With Steam running, click **Launch ETS2 MP**.
+
+The default standalone bottle is located at:
+
+```text
+~/Library/Application Support/TruckersMP-Launcher/TruckersmpBottle
+```
 
 ### CrossOver
 
-1. Select **CrossOver** on the main screen.
-2. Open **Settings** and configure the Wine executable, bottle, Steam folder, and ETS2 folder.
-3. Click **Save paths**, then **Start Steam** and **Launch ETS2 MP**.
+1. Install Windows Steam and ETS2 in a CrossOver bottle.
+2. Select **CrossOver** in the launcher.
+3. Open **Settings** and select the CrossOver Wine executable, bottle directory, Steam folder, and ETS2 folder. Set the truckersmp-cli path if needed.
+4. Click **Save paths**, then **Re-detect** to check the configuration.
+5. Click **Start Steam**, sign in, and then click **Launch ETS2 MP**.
+
+## Optional companion tools
 
 ### HaulLog
 
-After ETS2 is installed and detected, click **Install HaulLog**. The launcher first checks for the Windows x64 .NET 8 Desktop Runtime in the selected bottle. If missing, it downloads Microsoft's installer, verifies its SHA-512 checksum, and waits for runtime setup to finish before opening the official HaulLog installer. Finish HaulLog setup in that window. The button changes to **Reinstall HaulLog** once the app is detected. Wine Mono and native macOS .NET do not replace this Windows runtime.
+Once ETS2 is detected, click **Install HaulLog** and finish the installer in its Windows setup window. The launcher checks for the Windows x64 .NET 8 Desktop Runtime first and installs it if missing, verifying Microsoft's installer checksum. Native macOS .NET and Wine Mono do not replace this runtime.
 
-Steam status is checked every five seconds, including Steam started outside the launcher. HaulLog app and game plugin detection run in the background.
+The button changes to **Reinstall HaulLog** when an installation is detected. Application and game plugin detection run in the background.
 
 ### TruckerSVN Tool
 
-Click **Install TruckerSVN Tool** to install the native macOS app (HGL Portal Hub). The launcher downloads the official macOS bundle, checks its app identity and code signature, and verifies the published SHA-256 checksum when one is supplied. It installs the bundle in `~/Library/Application Support/TruckersMP-Launcher/tools/`; existing copies in Applications are also detected. Detection displays the installed version.
+Click **Install TruckerSVN Tool** to install the native macOS app, also known as HGL Portal Hub. The launcher checks the downloaded app's identity and code signature, and verifies a published SHA-256 checksum when available. Existing installations in Applications are also detected.
 
-Click **Open TruckerSVN Tool** to open the native app and connect its game and save folders to the launcher’s selected Wine bottle. The launcher uses the Tool’s existing local configuration API and verifies that the native app owns that service before changing settings. Other Tool preferences and the game’s developer, console, and convoy settings are preserved. If ETS2 has no save profiles yet, open ETS2 once and create a profile, then reopen the Tool.
+Click **Open TruckerSVN Tool** to open the app and connect its game and save folders to the selected Wine bottle. If there are no ETS2 profiles yet, start the game and create one first. Close other Tool instances if its local configuration service is already occupied.
 
-The native app uses macOS WebKit, avoiding the WebView2 graphics crash reproduced with Wine 11.11. Save editing and game data access use the selected Wine folders; features that require Windows process memory remain subject to the native Tool’s platform support. No WebView2 installation is needed. Previously installed Windows Tool files are left in the bottle.
-
-Native app output is saved in `~/Library/Application Support/TruckersMP-Launcher/truckersvn-native.log`. If the local configuration service is occupied by another Tool instance, close that instance and retry **Open**.
-
-### Installing truckersmp-cli
-
-```bash
-pip3 install truckersmp-cli
-```
-
-If `pip3` isn't available, install Python 3 from [python.org](https://www.python.org/downloads/) first.
-
----
+The native app uses macOS WebKit and does not require WebView2. Features that depend on Windows process memory are subject to the native Tool's platform support.
 
 ## Troubleshooting
 
-- If a launch fails, expand **Log** beneath Detection to read the error.
-- If a path is missing, use **Settings** to set it, or click **Re-detect**.
-- Steam must be installed inside the selected Wine bottle. Its running state appears on the Steam button.
-- Wine installation checks require both 64-bit and 32-bit Windows DLLs. Run the setup wizard again if the bottle is incomplete.
-- HaulLog installer output is saved in `~/Library/Application Support/TruckersMP-Launcher/haullog-installer.log`.
-- HaulLog's .NET runtime setup output is saved alongside it in `haullog-dotnet-install.log`.
+- **Missing dependency or incorrect path:** click **Re-detect**, then review **Settings** and save the correct paths.
+- **Steam or ETS2 is not detected:** confirm that the Windows versions are installed in the selected bottle.
+- **Multiplayer does not launch:** expand **Log** below Detection and review the error. Confirm Steam is running and your game version is supported by TruckersMP.
+- **Incomplete standalone setup:** reopen the setup wizard. Wine validation checks for both 64-bit and 32-bit Windows DLLs.
+- **Companion installation fails:** inspect the relevant log in the application data directory.
 
-## Uninstalling
+Application data and installer logs are stored under:
 
-To remove the app and its saved setup, delete these locations:
+```text
+~/Library/Application Support/TruckersMP-Launcher/
+```
 
-1. **The app itself**
-   - `/Applications/TruckersMP For macOS.app`
-
-2. **App data** (Wine builds, bottles, DXMT)
-   - `~/Library/Application Support/TruckersMP-Launcher`
-
-3. **Launcher config** (settings, keybinds, saved paths)
-   - `~/.config/truckersmp-launcher`
-
----
+Useful logs include `steam-installer.log`, `haullog-installer.log`, `haullog-dotnet-install.log`, and `truckersvn-native.log`. When reporting a problem, include your macOS version, hardware, selected Wine mode, and relevant log entries. Remove personal information from logs before sharing them.
 
 ## Development
 
-Use Node.js 22.12 or newer for packaging (required by the current Electron build tools).
+Use Node.js **22.12 or newer** and npm. From the repository root:
 
-```bash
+```sh
 npm ci
 npm start
-npm test
-npm run format:check
-npm run build
 ```
 
-`npm start` and the build commands compile EJS templates automatically. Edit `src/views/index.ejs` and its partials, then use `npm run ui:build` to regenerate `src/index.html` when needed. The HTML file is generated output. EJS runs only during this build step; it is not evaluated in the Electron renderer.
+Available commands:
 
-| Location                                                   | Responsibility                                            |
-| ---------------------------------------------------------- | --------------------------------------------------------- |
-| `main.js`                                                  | Electron entry point                                      |
-| `src/main/index.js`                                        | Window lifecycle and service wiring                       |
-| `src/main/game.js`, `steam.js`                             | Game and Steam sessions                                   |
-| `src/main/wine.js`, `wine-graphics.js`                     | Wine paths, environment, bottle checks and graphics setup |
-| `src/main/wine-install.js`, `bottle.js`, `dxmt-install.js` | Setup wizard operations                                   |
-| `src/main/companions.js`                                   | HaulLog and native TruckerSVN integration                 |
-| `src/renderer/`                                            | UI controllers, state, logging, settings and setup wizard |
-| `src/views/`                                               | EJS layout and reusable UI partials                       |
-| `preload.js`                                               | Supported IPC requests and events                         |
-| `tests/`                                                   | Module tests, UI state tests and IPC/template checks      |
+| Command                | Purpose                                      |
+| ---------------------- | -------------------------------------------- |
+| `npm start`            | Generate the UI and run Electron             |
+| `npm test`             | Run the Node.js test suite                   |
+| `npm run format:check` | Check source and README formatting           |
+| `npm run format`       | Apply formatting                             |
+| `npm run ui:build`     | Generate `src/index.html` from EJS templates |
+| `npm run build`        | Build a macOS arm64 DMG                      |
+| `npm run build:x64`    | Build for macOS x64                          |
 
-The inactive Discord RPC, telemetry, events, player search, launcher updater, legacy Wine selection, and arbitrary Wine command endpoints have been removed. Stopping a game cleans up its selected Wine bottle; it does not run system-wide process-kill commands.
+Build output is written to `dist/`. An x64 package does not by itself establish compatibility with Intel Macs or the standalone Wine build.
 
-### Wine CLI compatibility
+Edit the templates in `src/views/` rather than the generated `src/index.html`. EJS runs at build time, not inside the Electron renderer. Starting or packaging the app regenerates the HTML automatically.
 
-The pinned custom Wine build omits `winedbg.exe`, which `truckersmp-cli` normally uses to check whether Steam is running. `src/cli-wine.js` selects the executable adapter in `src/compat/wine-cli.sh` when that debugger is absent. The adapter answers only the process-list request using `tasklist.exe`; all other arguments go to the selected Wine binary unchanged. The installed Python package is not patched.
+### Project layout
 
-The adapter must be executable and reside outside `app.asar`. The Electron builder configuration unpacks `src/compat/**` automatically. Tests cover process-list parsing, normal argument forwarding, failure propagation and packaging.
+| Path                     | Responsibility                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `main.js`                | Electron entry point                                                                |
+| `preload.js`             | Renderer IPC bridge                                                                 |
+| `src/main/`              | Application lifecycle, detection, Wine setup, game sessions, and companion services |
+| `src/renderer/`          | UI state, controls, settings, and setup wizard                                      |
+| `src/views/`             | EJS layout and partials                                                             |
+| `src/wine-release.js`    | Pinned standalone Wine download recipe                                              |
+| `src/compat/wine-cli.sh` | Wine compatibility adapter for truckersmp-cli                                       |
+| `scripts/build-ui.js`    | UI template compilation                                                             |
+| `tests/`                 | Service, controller, IPC, template, and compatibility tests                         |
 
-### Validation
+The pinned Wine build omits `winedbg.exe`, which truckersmp-cli normally uses to detect Steam. The compatibility adapter handles that process-list request through `tasklist.exe` and forwards other arguments to Wine. It does not modify the installed Python package. The adapter must remain executable and outside `app.asar`; the packaging configuration unpacks `src/compat/` for this purpose.
 
-Tests import controller/service exports directly. The preload contract test checks that every exposed request has a registered backend handler. UI templates are checked for duplicate IDs and unresolved EJS tags. Tests that exercise the native Tool API use a local loopback server.
+## Remove the launcher
 
-PRs and issues welcome. For launch failures, include the relevant entries from the collapsed Log section.
+Delete the application from wherever you installed it. To remove saved settings and managed runtime data as well, delete:
 
-## Acknowledgements
+```text
+~/Library/Application Support/TruckersMP-Launcher
+~/.config/truckersmp-launcher
+```
 
-This project was developed with AI assistance — what started as an idea became a reality with its help.
-Inspired by [matyash12's unofficial TruckersMP macOS launcher](https://github.com/matyash12/unofficial-truckersmp-macos-launcher).
+The application data directory can contain your standalone bottle, installed games, and saves. Back up anything you want to keep before deleting it. Bottles or companion apps installed elsewhere must be managed separately.
 
----
+## Credits and license
 
-## Credits
+This project builds on earlier macOS launcher work, including [matyash12's unofficial launcher](https://github.com/matyash12/unofficial-truckersmp-macos-launcher), and uses:
 
-this project uses the following tools:
+- [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) for TruckersMP installation and launching.
+- [Wine](https://www.winehq.org/) and the [custom Wine builds](https://github.com/nohero765/wine-builds-) referenced by the standalone setup.
+- [CrossOver](https://www.codeweavers.com/crossover) and CodeWeavers' Wine contributions.
+- [DXMT](https://github.com/3Shain/dxmt) for Direct3D-to-Metal translation.
+- [Electron](https://www.electronjs.org/) for the desktop application.
 
-- **[Wine](https://www.winehq.org/)** — Windows compatibility layer. (the project TruckersMP for macOS uses this custom built [Wine](https://github.com/nohero765/wine-builds-))
-- **[CodeWeavers/CrossOver](https://www.codeweavers.com/crossover)** — This project's custom Wine build Uses CodeWeavers' CrossOver patches. Thank you for their years of upstream Wine contributions.
-- **[DXMT](https://github.com/3Shain/dxmt)** — DirectX to Metal translation layer used in place of D3DMetal.
-- **[truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli)** — Used to launch TruckersMP and install TMP files.
+See [LICENSE](LICENSE) for the repository's GNU General Public License v3 text. The `license` field in `package.json` currently says MIT and is inconsistent with that file.
 
-a big thank you for these developers who developed these tools the project wouldn't have been possible without their hard work.
-
----
-
-## Disclaimer
-
-This project is an independent, open-source launcher for TruckersMP on macOS. It is not affiliated with, endorsed by, or sponsored by TruckersMP or SCS Software. All trademarks and copyrights belong to their respective owners.
-
-## License
-
-GPL-3.0
+This is an independent project and is not affiliated with or endorsed by TruckersMP, SCS Software, or CodeWeavers. Product names and trademarks belong to their respective owners.
