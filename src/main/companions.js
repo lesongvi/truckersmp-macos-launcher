@@ -71,6 +71,8 @@ function registerCompanionHandlers({ ipcMain, state, paths, wine }) {
   })
 
   ipcMain.handle('truckersvn:open', async (_, s) => {
+    if (s.game === 'ats')
+      return { ok: false, error: 'TruckerSVN integration is currently available for ETS2 only.' }
     try {
       const status = truckersvn.getToolStatus({ dataDir: SW_DIR })
       if (!status.installed)
@@ -104,6 +106,8 @@ function registerCompanionHandlers({ ipcMain, state, paths, wine }) {
   }))
 
   ipcMain.handle('haullog:install', async (_, s) => {
+    if (s.game === 'ats')
+      return { ok: false, error: 'HaulLog integration is currently available for ETS2 only.' }
     if (truckersvnSetupActive) return { ok: false, error: 'Finish TruckerSVN Tool setup first.' }
     if (haulLogInstallerActive) return { ok: false, error: 'HaulLog setup is already open.' }
     if (state.gameProcess) return { ok: false, error: 'Close ETS2 before installing HaulLog.' }

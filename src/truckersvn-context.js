@@ -17,7 +17,11 @@ function winePathToHost(bottlePath, windowsPath) {
   return fs.existsSync(mapped) ? path.join(mapped, ...parts) : ''
 }
 
-function findWineDocuments(bottlePath, requiredEntry = 'profiles') {
+function findWineDocuments(
+  bottlePath,
+  requiredEntry = 'profiles',
+  gameFolder = 'Euro Truck Simulator 2'
+) {
   if (!bottlePath) return ''
   const candidates = []
   try {
@@ -39,8 +43,7 @@ function findWineDocuments(bottlePath, requiredEntry = 'profiles') {
   } catch {}
   return (
     candidates.find(
-      (folder) =>
-        folder && fs.existsSync(path.join(folder, 'Euro Truck Simulator 2', requiredEntry))
+      (folder) => folder && fs.existsSync(path.join(folder, gameFolder, requiredEntry))
     ) || ''
   )
 }

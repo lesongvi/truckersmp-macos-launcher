@@ -12,18 +12,25 @@ export function createCompanionController({ state, ui, api, collect, wineContext
     const status = state.haulLogStatus
     const button = $('btn-haullog-install')
     button.disabled =
-      state.haulLogBusy || status.installing || !status.canInstall || status.gameRunning
+      state.settings.game === 'ats' ||
+      state.haulLogBusy ||
+      status.installing ||
+      !status.canInstall ||
+      status.gameRunning
     button.textContent =
       state.haulLogBusy || status.installing
         ? 'Installing HaulLog…'
         : status.appInstalled
           ? 'Reinstall HaulLog'
           : 'Install HaulLog'
-    button.title = !status.gameReady
-      ? 'Install ETS2 and re-detect its path first.'
-      : status.gameRunning
-        ? 'Close ETS2 first.'
-        : 'Install in the selected Wine bottle.'
+    button.title =
+      state.settings.game === 'ats'
+        ? 'Available for ETS2 only.'
+        : !status.gameReady
+          ? 'Install ETS2 and re-detect its path first.'
+          : status.gameRunning
+            ? 'Close ETS2 first.'
+            : 'Install in the selected Wine bottle.'
   }
   async function refreshHaulLogStatus() {
     const context = wineContextKey()
@@ -84,16 +91,23 @@ export function createCompanionController({ state, ui, api, collect, wineContext
     if (!state.truckersvnStatus) return
     const status = state.truckersvnStatus
     const button = $('btn-truckersvn')
-    button.disabled = state.truckersvnBusy || status.installing || !status.canInstall
+    button.disabled =
+      state.settings.game === 'ats' ||
+      state.truckersvnBusy ||
+      status.installing ||
+      !status.canInstall
     button.textContent =
       state.truckersvnBusy || status.installing
         ? 'Setting up TruckerSVN…'
         : status.installed
           ? 'Open TruckerSVN Tool'
           : 'Install TruckerSVN Tool'
-    button.title = status.installed
-      ? 'Native macOS app · uses the selected Wine game and profiles.'
-      : 'Install the native macOS TruckerSVN Tool.'
+    button.title =
+      state.settings.game === 'ats'
+        ? 'Available for ETS2 only.'
+        : status.installed
+          ? 'Native macOS app · uses the selected Wine game and profiles.'
+          : 'Install the native macOS TruckerSVN Tool.'
   }
   async function refreshTruckerSVNStatus() {
     const context = wineContextKey()

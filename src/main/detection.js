@@ -1,3 +1,4 @@
+const { selectedGame } = require('../games')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
@@ -161,7 +162,8 @@ function findCLIPath() {
   return null
 }
 
-function runAutoDetect() {
+function runAutoDetect(settings = {}) {
+  const game = selectedGame(settings)
   const r = {
     cliPath: '',
     winePath: '',
@@ -200,7 +202,7 @@ function runAutoDetect() {
           r.bottlePath = full
           r.steamDir = steam
           r.steamFound = true
-          const ets2 = path.join(steam, 'steamapps', 'common', 'Euro Truck Simulator 2')
+          const ets2 = path.join(steam, 'steamapps', 'common', game.folder)
           if (fs.existsSync(ets2)) {
             r.gameDir = ets2
             r.gameFound = true

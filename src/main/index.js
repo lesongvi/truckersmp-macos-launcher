@@ -1,3 +1,4 @@
+const { selectedGame } = require('../games')
 const fs = require('fs')
 const path = require('path')
 const { findWineDocuments } = require('../truckersvn-context')
@@ -44,17 +45,18 @@ function createApplication({ app, BrowserWindow, ipcMain, dialog, shell }, paths
     settings.saveSettings(value)
     return true
   })
-  ipcMain.handle('settings:detect', () => detection.runAutoDetect())
+  ipcMain.handle('settings:detect', (_, value) => detection.runAutoDetect(value))
   ipcMain.handle('game:openDocuments', async (_, value) => {
     try {
       const context = wine.selectedWineContext(value)
-      const documents = findWineDocuments(context.bottlePath, '')
+      const game = selectedGame(value)
+      const documents = findWineDocuments(context.bottlePath, '', game.folder)
       if (!documents)
         return {
           ok: false,
-          error: 'ETS2 documents folder not found in the selected bottle. Start ETS2 once first.'
+          error: `${game.name} documents folder not found in the selected bottle. Start ${game.name} once first.`
         }
-      const error = await shell.openPath(path.join(documents, 'Euro Truck Simulator 2'))
+      const error = await shell.openPath(path.join(documents, game.folder))
       return error ? { ok: false, error } : { ok: true }
     } catch (error) {
       return { ok: false, error: error.message }

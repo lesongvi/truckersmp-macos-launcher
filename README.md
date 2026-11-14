@@ -1,6 +1,6 @@
 # TruckersMP for macOS
 
-An unofficial Electron launcher for playing Euro Truck Simulator 2 multiplayer through [TruckersMP](https://truckersmp.com) on macOS. It uses [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) to launch multiplayer and runs the Windows game through either standalone Wine or CrossOver.
+An unofficial Electron launcher for playing Euro Truck Simulator 2 and American Truck Simulator multiplayer through [TruckersMP](https://truckersmp.com) on macOS. It uses [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) to launch multiplayer and runs the Windows game through either standalone Wine or CrossOver.
 
 This repository continues an inherited launcher project. This README describes the implementation in this checkout; instructions and release information from deprecated repositories may differ.
 
@@ -62,7 +62,11 @@ The default standalone bottle is located at:
 4. Click **Save paths**, then **Re-detect** to check the configuration.
 5. Click **Start Steam**, sign in, and then click **Launch ETS2 MP**.
 
-Click **Open ETS2 Documents** to open the selected bottle’s `Documents/Euro Truck Simulator 2` folder in Finder, including its configuration, saves, and screenshots. Start ETS2 once first if the folder does not exist.
+Select **Euro Truck Simulator 2** or **American Truck Simulator** from the **Game** menu. Install the Windows version of that game in the selected bottle, then click **Re-detect**. ETS2 and ATS have separate paths in Settings for each Wine mode. Launch uses the corresponding TruckersMP mode. Game selection is locked while a session is launching or running.
+
+HaulLog and TruckerSVN integration currently remains ETS2-only; their buttons are disabled for ATS. ATS launching uses the same Wine and DXMT setup, but has not been verified in a live game session.
+
+Click **Open ETS2 Documents** (or **Open ATS Documents**) to open the selected bottle’s `Documents/Euro Truck Simulator 2` folder in Finder, including its configuration, saves, and screenshots. Start ETS2 once first if the folder does not exist.
 
 ## Optional companion tools
 

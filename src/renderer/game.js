@@ -1,17 +1,18 @@
 export function createGameController({ state, ui, api, collect, refreshHaulLogStatus }) {
   const { $, setStatus, showMessage, pushLog } = ui
+  const gameName = () => (state.settings.game === 'ats' ? 'ATS' : 'ETS2')
   function setGameLaunchPhase(phase, pid = state.gameLaunchPid) {
     state.gameLaunchPhase = phase
     state.gameLaunchPid = phase === 'idle' ? null : pid
     $('game-startup').classList.toggle('hidden', phase === 'idle')
     if (phase === 'initializing') {
-      setStatus('Initializing ETS2 MP…', 'launching', state.gameLaunchPid)
+      setStatus(`Initializing ${gameName()} MP…`, 'launching', state.gameLaunchPid)
       $('game-startup-text').textContent =
-        'Initializing ETS2 MP… Downloads and setup can take several minutes, especially on first launch. Please wait before stopping or restarting.'
+        `Initializing ${gameName()} MP… Downloads and setup can take several minutes, especially on first launch. Please wait before stopping or restarting.`
     } else if (phase === 'started') {
-      setStatus('ETS2 MP launched', 'running', state.gameLaunchPid)
+      setStatus(`${gameName()} MP launched`, 'running', state.gameLaunchPid)
       $('game-startup-text').textContent =
-        'ETS2 MP has been launched. The game window may take a while to appear. Check Log below for progress before restarting.'
+        `${gameName()} MP has been launched. The game window may take a while to appear. Check Log below for progress before restarting.`
     }
   }
   function updateGameLaunchProgress(entry) {
@@ -59,6 +60,9 @@ export function createGameController({ state, ui, api, collect, refreshHaulLogSt
     }
   }
   function updateLaunchBtn() {
+    $('game-select').disabled = state.running || state.launching
+    $('det-label-game').textContent = gameName()
+    $('btn-game-documents').textContent = `Open ${gameName()} Documents`
     const button = $('btn-launch')
     const ready = Object.values(state.readiness).every(Boolean)
     button.disabled = state.launching || (!state.running && !ready)
@@ -66,8 +70,8 @@ export function createGameController({ state, ui, api, collect, refreshHaulLogSt
     button.textContent = state.launching
       ? 'Launching…'
       : state.running
-        ? 'Stop ETS2 MP'
-        : 'Launch ETS2 MP'
+        ? `Stop ${gameName()} MP`
+        : `Launch ${gameName()} MP`
     const warning = $('launch-warn')
     warning.classList.toggle('hidden', ready || state.running || state.launching)
     warning.textContent =
@@ -77,7 +81,7 @@ export function createGameController({ state, ui, api, collect, refreshHaulLogSt
           ? 'Set the truckersmp-cli path in Settings.'
           : !state.readiness.steam
             ? 'Install Steam in the selected bottle.'
-            : 'Install ETS2 in Steam, then click Re-detect.'
+            : `Install ${gameName()} in Steam, then click Re-detect.`
   }
 
   function wire() {
@@ -110,7 +114,7 @@ export function createGameController({ state, ui, api, collect, refreshHaulLogSt
         $('log-details').open = true
         // Spawn errors already provide a more specific message via onLog.
         if (code !== -1 || !$('action-message').textContent)
-          showMessage(`ETS2 MP exited with code ${code}. Open Log for details.`, true)
+          showMessage(`${gameName()} MP exited with code ${code}. Open Log for details.`, true)
       }
       updateLaunchBtn()
       refreshHaulLogStatus()

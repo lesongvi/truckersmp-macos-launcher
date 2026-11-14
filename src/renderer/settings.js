@@ -7,9 +7,11 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
       's-bottle': 'bottlePath',
       's-steam': 'steamDir',
       's-game': 'gameDir',
+      's-ats': 'atsDir',
       'sw-bottle-path': 'standalonBottlePath',
       'sw-steam-dir': 'standalonSteamDir',
-      'sw-game-dir': 'standalonGameDir'
+      'sw-game-dir': 'standalonGameDir',
+      'sw-ats-dir': 'standalonAtsDir'
     }))
       if ($(id)) state.settings[key] = getField(id)
     state.settings.metalHud = $('s-metal-hud-sw').checked
@@ -22,18 +24,27 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
       's-bottle': 'bottlePath',
       's-steam': 'steamDir',
       's-game': 'gameDir',
+      's-ats': 'atsDir',
       'sw-bottle-path': 'standalonBottlePath',
       'sw-steam-dir': 'standalonSteamDir',
-      'sw-game-dir': 'standalonGameDir'
+      'sw-game-dir': 'standalonGameDir',
+      'sw-ats-dir': 'standalonAtsDir'
     }))
       fillField(id, state.settings[key])
   }
   function activePaths() {
     const standalone = state.settings.wineMode === 'standalone'
+    const ats = state.settings.game === 'ats'
     return {
       bottle: standalone ? state.settings.standalonBottlePath : state.settings.bottlePath,
       steam: standalone ? state.settings.standalonSteamDir : state.settings.steamDir,
-      game: standalone ? state.settings.standalonGameDir : state.settings.gameDir
+      game: ats
+        ? standalone
+          ? state.settings.standalonAtsDir
+          : state.settings.atsDir
+        : standalone
+          ? state.settings.standalonGameDir
+          : state.settings.gameDir
     }
   }
   async function refreshDetection() {
@@ -48,7 +59,12 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
         : exists(state.settings.winePath),
       exists(paths.bottle && paths.bottle + '/drive_c'),
       exists(paths.steam && paths.steam + '/steam.exe'),
-      exists(paths.game && paths.game + '/bin/win_x64/eurotrucks2.exe')
+      exists(
+        paths.game &&
+          paths.game +
+            '/bin/win_x64/' +
+            (state.settings.game === 'ats' ? 'amtrucks.exe' : 'eurotrucks2.exe')
+      )
     ])
     if (context !== wineContextKey()) return
     state.readiness = { cli, wine, bottle, steam, game }
@@ -63,12 +79,14 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
     if (!bottlePath) return
     const results = await Promise.allSettled([
       api.swAutoDetectSteamPath(bottlePath),
-      api.swAutoDetectGamePath(bottlePath)
+      api.swAutoDetectGamePath(bottlePath),
+      api.swAutoDetectGamePath(bottlePath, 'ats')
     ])
     let changed = false
     for (const [index, key, field, resultKey] of [
       [0, 'standalonSteamDir', 'sw-steam-dir', 'steamDir'],
-      [1, 'standalonGameDir', 'sw-game-dir', 'gameDir']
+      [1, 'standalonGameDir', 'sw-game-dir', 'gameDir'],
+      [2, 'standalonAtsDir', 'sw-ats-dir', 'gameDir']
     ]) {
       const result = results[index]
       if (!state.settings[key] && result.status === 'fulfilled' && result.value.ok) {
@@ -80,12 +98,15 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
     if (changed) await api.saveSettings(state.settings)
     if (state.settings.wineMode === 'standalone') {
       setBadge('badge-steam', !!state.settings.standalonSteamDir)
-      setBadge('badge-game', !!state.settings.standalonGameDir)
+      setBadge('badge-game', !!activePaths().game)
       updateButtons()
     }
   }
   function wineContextKey() {
     return JSON.stringify([
+      state.settings.game,
+      state.settings.atsDir,
+      state.settings.standalonAtsDir,
       state.settings.wineMode,
       state.settings.standalonBottlePath,
       state.settings.bottlePath,
@@ -101,7 +122,7 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
     button.disabled = true
     button.textContent = 'Detecting…'
     try {
-      state.detected = await api.detectPaths()
+      state.detected = await api.detectPaths(state.settings)
       if (state.detected.cliPath) {
         state.settings.cliPath = state.detected.cliPath
         fillField('s-cli', state.settings.cliPath)
@@ -109,8 +130,14 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
       if (state.settings.wineMode === 'standalone') {
         await detectStandaloneBottlePaths(state.settings.standalonBottlePath)
       } else {
-        for (const key of ['winePath', 'bottlePath', 'steamDir', 'gameDir'])
+        for (const key of ['winePath', 'bottlePath', 'steamDir'])
           if (!state.settings[key] && state.detected[key]) state.settings[key] = state.detected[key]
+        const result = await api.swAutoDetectGamePath(
+          state.settings.bottlePath,
+          state.settings.game
+        )
+        const key = state.settings.game === 'ats' ? 'atsDir' : 'gameDir'
+        if (!state.settings[key] && result.ok) state.settings[key] = result.gameDir
         populatePaths()
       }
       await api.saveSettings(state.settings)
@@ -124,6 +151,19 @@ export function createSettingsController({ state, ui, api, updateButtons, refres
     }
   }
   function wire() {
+    $('game-select').value = state.settings.game === 'ats' ? 'ats' : 'ets2'
+    $('game-select').addEventListener('change', async () => {
+      if (state.running || state.launching) return
+      collect()
+      state.settings.game = $('game-select').value === 'ats' ? 'ats' : 'ets2'
+      state.readiness.game = false
+      updateButtons()
+      try {
+        await redetectPaths()
+      } catch (err) {
+        showMessage(err.message, true)
+      }
+    })
     $('btn-header-settings').addEventListener('click', () => $('panel-settings').showModal())
     $('close-settings-popup').addEventListener('click', () => $('panel-settings').close())
     $('btn-save').addEventListener('click', async () => {

@@ -38,9 +38,12 @@ export function createRenderer({ api, document }) {
 
   async function init() {
     state.settings = await api.loadSettings()
-    state.detected = await api.detectPaths()
-    for (const key of ['cliPath', 'winePath', 'bottlePath', 'steamDir', 'gameDir'])
+    state.detected = await api.detectPaths(state.settings)
+    for (const key of ['cliPath', 'winePath', 'bottlePath', 'steamDir'])
       if (!state.settings[key] && state.detected[key]) state.settings[key] = state.detected[key]
+    const gameKey = state.settings.game === 'ats' ? 'atsDir' : 'gameDir'
+    if (!state.settings[gameKey] && state.detected.gameDir)
+      state.settings[gameKey] = state.detected.gameDir
     settings.populatePaths()
     ui.$('s-retina-mode').checked = !!state.settings.standalonRetinaMode
     ui.$('s-metal-hud-sw').checked = !!state.settings.metalHud

@@ -22,6 +22,11 @@
   </div>
 
   <section class="launch-controls" aria-label="Game launch">
+    <label for="game-select">Game</label>
+    <select id="game-select" class="s-input" aria-label="Game">
+      <option value="ets2">Euro Truck Simulator 2</option>
+      <option value="ats">American Truck Simulator</option>
+    </select>
     <div class="card-wine-toggle" role="group" aria-label="Wine mode">
       <button class="card-wine-btn" id="cwt-cx" aria-pressed="false">CrossOver</button>
       <button class="card-wine-btn" id="cwt-sw" aria-pressed="false">Standalone</button>
@@ -54,7 +59,7 @@
     <div class="det-row"><span id="det-label-wine">Wine</span><span class="det-badge" id="badge-crossover">Checking…</span></div>
     <div class="det-row"><span>truckersmp-cli</span><span class="det-badge" id="badge-cli">Checking…</span></div>
     <div class="det-row"><span>Steam</span><span class="det-badge" id="badge-steam">Checking…</span></div>
-    <div class="det-row"><span>ETS2</span><span class="det-badge" id="badge-game">Checking…</span></div>
+    <div class="det-row"><span id="det-label-game">ETS2</span><span class="det-badge" id="badge-game">Checking…</span></div>
     <div class="det-row"><span>HaulLog</span><span class="det-badge" id="badge-haullog">Checking…</span></div>
     <div class="det-row"><span>TruckerSVN Tool</span><span class="det-badge" id="badge-truckersvn">Checking…</span></div>
   </section>
@@ -80,6 +85,8 @@
 
       <div class="s-field"><label class="s-label" for="s-game">ETS2 folder</label><div class="s-row"><input class="s-input" id="s-game" spellcheck="false"/><button class="s-browse" data-target="s-game" data-folder="true">Browse</button></div></div>
 
+      <div class="s-field"><label class="s-label" for="s-ats">ATS folder</label><div class="s-row"><input class="s-input" id="s-ats" spellcheck="false"/><button class="s-browse" data-target="s-ats" data-folder="true">Browse</button></div></div>
+
     </div>
     <div id="wm-standalone-paths" class="hidden">
       <div class="s-field"><label class="s-label" for="sw-bottle-path">Bottle</label><div class="s-row"><input class="s-input" id="sw-bottle-path" spellcheck="false"/><button class="s-browse" data-target="sw-bottle-path" data-folder="true">Browse</button></div></div>
@@ -87,6 +94,8 @@
       <div class="s-field"><label class="s-label" for="sw-steam-dir">Steam folder</label><div class="s-row"><input class="s-input" id="sw-steam-dir" spellcheck="false"/><button class="s-browse" data-target="sw-steam-dir" data-folder="true">Browse</button></div></div>
 
       <div class="s-field"><label class="s-label" for="sw-game-dir">ETS2 folder</label><div class="s-row"><input class="s-input" id="sw-game-dir" spellcheck="false"/><button class="s-browse" data-target="sw-game-dir" data-folder="true">Browse</button></div></div>
+
+      <div class="s-field"><label class="s-label" for="sw-ats-dir">ATS folder</label><div class="s-row"><input class="s-input" id="sw-ats-dir" spellcheck="false"/><button class="s-browse" data-target="sw-ats-dir" data-folder="true">Browse</button></div></div>
 
       <div class="setup-status">
         <span><span id="sw-ind-wine">○</span> <span id="sw-lbl-wine">Wine 11.11</span></span>

@@ -1,3 +1,4 @@
+const { selectedGame } = require('../games')
 const fs = require('fs')
 const path = require('path')
 const { spawn: defaultSpawn } = require('child_process')
@@ -19,7 +20,7 @@ function buildArgs(settings) {
     '-r',
     'dx11',
     'start',
-    'ets2mp'
+    selectedGame(settings).target
   ]
   const extra = (settings.extraArgs || '').trim().split(/\s+/).filter(Boolean)
   if (!extra.includes('-v') && !extra.includes('--verbose')) extra.push('-v')
@@ -65,6 +66,7 @@ function createGameController({
   }
 
   async function launch(settings) {
+    const game = selectedGame(settings)
     if (state.gameProcess)
       return {
         ok: false,
@@ -89,10 +91,10 @@ function createGameController({
         )
       if (
         !context.gameDir ||
-        !fs.existsSync(path.join(context.gameDir, 'bin/win_x64/eurotrucks2.exe'))
+        !fs.existsSync(path.join(context.gameDir, 'bin', 'win_x64', game.exe))
       )
         throw new Error(
-          'ETS2 is not installed in the selected bottle. Finish installing it in Steam, then click Re-detect.'
+          `${game.name} is not installed in the selected bottle. Finish installing it in Steam, then click Re-detect.`
         )
       const env = environment(context, settings)
       const args = buildArgs({ ...settings, ...context })
@@ -101,7 +103,7 @@ function createGameController({
       const commandArgs = python ? [settings.cliPath, ...args] : args
       sendLog(
         'system',
-        `Launching ETS2 MP using ${context.standalone ? 'Standalone Wine' : 'CrossOver'}…`
+        `Launching ${game.name} MP using ${context.standalone ? 'Standalone Wine' : 'CrossOver'}…`
       )
       sendLog('info', `Wine: ${context.winePath}`, 'wine')
       if (env.WINE !== context.winePath)

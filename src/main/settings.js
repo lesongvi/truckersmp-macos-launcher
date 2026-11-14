@@ -24,6 +24,9 @@ function createSettingsStore(settingsPath) {
       bottlePath: '',
       steamDir: '',
       gameDir: '',
+      game: 'ets2',
+      atsDir: '',
+      standalonAtsDir: '',
       extraArgs: '',
       wineMode: 'crossover',
       standalonBottlePath: path.join(

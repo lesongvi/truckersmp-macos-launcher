@@ -140,7 +140,14 @@ function createWineService(paths) {
       winePath: standalone ? standaloneWineBin() : s.winePath,
       bottlePath: standalone ? s.standalonBottlePath : s.bottlePath,
       steamDir: standalone ? s.standalonSteamDir : s.steamDir,
-      gameDir: standalone ? s.standalonGameDir : s.gameDir
+      gameDir:
+        s.game === 'ats'
+          ? standalone
+            ? s.standalonAtsDir
+            : s.atsDir
+          : standalone
+            ? s.standalonGameDir
+            : s.gameDir
     }
   }
 

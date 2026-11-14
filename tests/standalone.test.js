@@ -258,3 +258,50 @@ test('stopping a session uses its selected prefix rather than global process kil
   f.child.emit('close', null)
   assert.equal(f.events.at(-1).data.code, 0)
 })
+
+test('ATS launch requires amtrucks.exe and selects atsmp', async (t) => {
+  const f = gameFixture(t)
+  f.settings.game = 'ats'
+  const missing = await f.game.launch(f.settings)
+  assert.equal(missing.ok, false)
+  assert.match(missing.error, /ATS is not installed/)
+  fs.writeFileSync(path.join(f.selected.gameDir, 'bin/win_x64/amtrucks.exe'), '')
+  assert.equal((await f.game.launch(f.settings)).ok, true)
+  assert.ok(f.invocation()[1].includes('atsmp'))
+  assert.ok(!f.invocation()[1].includes('ets2mp'))
+  assert.ok(f.logs.some((entry) => entry.text.startsWith('Launching ATS MP')))
+})
+
+test('game selection keeps separate installation paths in both Wine modes', (t) => {
+  const dir = root(t)
+  const wine = createWineService({ dataDir: dir, winesDir: path.join(dir, 'wines') })
+  const settings = {
+    gameDir: '/cx/ets2',
+    atsDir: '/cx/ats',
+    standalonGameDir: '/sw/ets2',
+    standalonAtsDir: '/sw/ats'
+  }
+  assert.equal(wine.selectedWineContext(settings).gameDir, '/cx/ets2')
+  assert.equal(wine.selectedWineContext({ ...settings, game: 'ats' }).gameDir, '/cx/ats')
+  assert.equal(
+    wine.selectedWineContext({ ...settings, wineMode: 'standalone' }).gameDir,
+    '/sw/ets2'
+  )
+  assert.equal(
+    wine.selectedWineContext({ ...settings, wineMode: 'standalone', game: 'ats' }).gameDir,
+    '/sw/ats'
+  )
+})
+
+test('bottle game detection distinguishes ATS from ETS2', (t) => {
+  const { handlers, dataDir } = bottleHandlers(t)
+  const folder = path.join(
+    dataDir,
+    'drive_c/Program Files (x86)/Steam/steamapps/common/American Truck Simulator'
+  )
+  fs.mkdirSync(path.join(folder, 'bin/win_x64'), { recursive: true })
+  fs.writeFileSync(path.join(folder, 'bin/win_x64/amtrucks.exe'), '')
+  const detect = handlers.get('standalone:autoDetectGamePath')
+  assert.equal(detect(null, dataDir).ok, false)
+  assert.deepEqual(detect(null, dataDir, 'ats'), { ok: true, gameDir: folder })
+})

@@ -1,3 +1,4 @@
+const { selectedGame } = require('../games')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
@@ -186,7 +187,8 @@ function registerBottleHandlers({
 
   // Auto-detect ETS2 game dir inside a bottle after Steam installs it.
   // Walks bottle/drive_c/Program Files (x86)/Steam/steamapps/common/Euro Truck Simulator 2
-  ipcMain.handle('standalone:autoDetectGamePath', (_, bottlePath) => {
+  ipcMain.handle('standalone:autoDetectGamePath', (_, bottlePath, gameId) => {
+    const game = selectedGame({ game: gameId })
     if (!bottlePath) return { ok: false, error: 'No bottle path' }
     const candidates = [
       path.join(
@@ -196,23 +198,17 @@ function registerBottleHandlers({
         'Steam',
         'steamapps',
         'common',
-        'Euro Truck Simulator 2'
+        game.folder
       ),
-      path.join(
-        bottlePath,
-        'drive_c',
-        'Program Files',
-        'Steam',
-        'steamapps',
-        'common',
-        'Euro Truck Simulator 2'
-      )
+      path.join(bottlePath, 'drive_c', 'Program Files', 'Steam', 'steamapps', 'common', game.folder)
     ]
     for (const p of candidates) {
-      if (fs.existsSync(path.join(p, 'bin', 'win_x64', 'eurotrucks2.exe')))
-        return { ok: true, gameDir: p }
+      if (fs.existsSync(path.join(p, 'bin', 'win_x64', game.exe))) return { ok: true, gameDir: p }
     }
-    return { ok: false, error: 'ETS2 not found — make sure Steam has finished installing it.' }
+    return {
+      ok: false,
+      error: `${game.name} not found — make sure Steam has finished installing it.`
+    }
   })
 
   ipcMain.handle('standalone:setRetinaMode', (_, { bottlePath, enabled }) => {

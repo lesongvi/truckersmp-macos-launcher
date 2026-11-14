@@ -96,3 +96,17 @@ test('failed or prematurely exited launches cannot leave a stale initialization 
   assert.equal(fields['status-label'].textContent, 'Game exited')
   assert.match(fields['action-message'].textContent, /exited with code 1/)
 })
+
+test('ATS selection updates launch labels, documents and locks selection during launch', async () => {
+  const f = await fixture()
+  f.state.settings.game = 'ats'
+  f.game.updateLaunchBtn()
+  assert.equal(f.fields['btn-launch'].textContent, 'Launch ATS MP')
+  assert.equal(f.fields['btn-game-documents'].textContent, 'Open ATS Documents')
+  const pending = f.game.launchOrStopGame()
+  assert.equal(f.fields['game-select'].disabled, true)
+  assert.equal(f.fields['status-label'].textContent, 'Initializing ATS MP…')
+  f.finish({ ok: true, pid: 123 })
+  await pending
+  assert.equal(f.fields['btn-launch'].textContent, 'Stop ATS MP')
+})

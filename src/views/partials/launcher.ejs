@@ -10,6 +10,11 @@
   </div>
 
   <section class="launch-controls" aria-label="Game launch">
+    <label for="game-select">Game</label>
+    <select id="game-select" class="s-input" aria-label="Game">
+      <option value="ets2">Euro Truck Simulator 2</option>
+      <option value="ats">American Truck Simulator</option>
+    </select>
     <div class="card-wine-toggle" role="group" aria-label="Wine mode">
       <button class="card-wine-btn" id="cwt-cx" aria-pressed="false">CrossOver</button>
       <button class="card-wine-btn" id="cwt-sw" aria-pressed="false">Standalone</button>
@@ -42,7 +47,7 @@
     <div class="det-row"><span id="det-label-wine">Wine</span><span class="det-badge" id="badge-crossover">Checking…</span></div>
     <div class="det-row"><span>truckersmp-cli</span><span class="det-badge" id="badge-cli">Checking…</span></div>
     <div class="det-row"><span>Steam</span><span class="det-badge" id="badge-steam">Checking…</span></div>
-    <div class="det-row"><span>ETS2</span><span class="det-badge" id="badge-game">Checking…</span></div>
+    <div class="det-row"><span id="det-label-game">ETS2</span><span class="det-badge" id="badge-game">Checking…</span></div>
     <div class="det-row"><span>HaulLog</span><span class="det-badge" id="badge-haullog">Checking…</span></div>
     <div class="det-row"><span>TruckerSVN Tool</span><span class="det-badge" id="badge-truckersvn">Checking…</span></div>
   </section>
