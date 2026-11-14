@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { findWineDocuments } = require('../truckersvn-context')
 const { createPaths } = require('./paths')
 const { createSettingsStore } = require('./settings')
 const detection = require('./detection')
@@ -13,7 +14,7 @@ const { registerSteamHandlers } = require('./steam')
 const { registerGameHandlers } = require('./game')
 const { registerCompanionHandlers } = require('./companions')
 
-function createApplication({ app, BrowserWindow, ipcMain, dialog }, paths = createPaths()) {
+function createApplication({ app, BrowserWindow, ipcMain, dialog, shell }, paths = createPaths()) {
   const state = {
     window: null,
     gameProcess: null,
@@ -44,6 +45,21 @@ function createApplication({ app, BrowserWindow, ipcMain, dialog }, paths = crea
     return true
   })
   ipcMain.handle('settings:detect', () => detection.runAutoDetect())
+  ipcMain.handle('game:openDocuments', async (_, value) => {
+    try {
+      const context = wine.selectedWineContext(value)
+      const documents = findWineDocuments(context.bottlePath, '')
+      if (!documents)
+        return {
+          ok: false,
+          error: 'ETS2 documents folder not found in the selected bottle. Start ETS2 once first.'
+        }
+      const error = await shell.openPath(path.join(documents, 'Euro Truck Simulator 2'))
+      return error ? { ok: false, error } : { ok: true }
+    } catch (error) {
+      return { ok: false, error: error.message }
+    }
+  })
   ipcMain.handle('fs:exists', (_, value) => !!value && fs.existsSync(value))
   ipcMain.handle('dialog:browse', async (_, options = {}) => {
     const result = await dialog.showOpenDialog(state.window, {

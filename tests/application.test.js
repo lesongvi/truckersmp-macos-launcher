@@ -104,3 +104,34 @@ test('EJS partials produce complete static UI without runtime template evaluatio
   assert.equal(ids.length, new Set(ids).size)
   assert.ok(!html.includes('Mac login password'))
 })
+
+test('opens ETS2 documents from the selected bottle before a profile exists', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'launcher-documents-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const bottle = path.join(root, 'bottle')
+  const folder = path.join(bottle, 'drive_c/users/player/Documents/Euro Truck Simulator 2')
+  fs.mkdirSync(folder, { recursive: true })
+  const { handlers, ipcMain } = registry()
+  const opened = []
+  createApplication(
+    {
+      ipcMain,
+      shell: {
+        openPath: async (value) => {
+          opened.push(value)
+          return ''
+        }
+      }
+    },
+    createPaths(root)
+  )
+  const open = handlers.get('game:openDocuments')
+  assert.equal((await open(null, { wineMode: 'standalone', standalonBottlePath: bottle })).ok, true)
+  assert.deepEqual(opened, [folder])
+  assert.equal(
+    (await open(null, { wineMode: 'standalone', standalonBottlePath: path.join(root, 'missing') }))
+      .ok,
+    false
+  )
+  assert.equal(opened.length, 1)
+})

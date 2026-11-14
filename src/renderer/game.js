@@ -83,6 +83,16 @@ export function createGameController({ state, ui, api, collect, refreshHaulLogSt
   function wire() {
     ui.onLogEntry = updateGameLaunchProgress
     $('btn-launch').addEventListener('click', launchOrStopGame)
+    $('btn-game-documents').addEventListener('click', async () => {
+      collect()
+      try {
+        const result = await api.openGameDocuments(state.settings)
+        if (!result.ok) throw new Error(result.error)
+      } catch (err) {
+        showMessage(err.message, true)
+        pushLog({ kind: 'error', text: err.message })
+      }
+    })
     $('btn-startup-log').addEventListener('click', () => {
       const log = $('log-details')
       log.open = true

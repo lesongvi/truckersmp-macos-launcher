@@ -8,6 +8,7 @@ const requests = {
   pathExists: 'fs:exists',
   launchGame: 'game:launch',
   stopGame: 'game:stop',
+  openGameDocuments: 'game:openDocuments',
   startSteam: 'game:startSteam',
   stopSteam: 'game:stopSteam',
   getSteamStatus: 'game:steamStatus',

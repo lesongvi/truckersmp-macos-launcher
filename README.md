@@ -62,6 +62,8 @@ The default standalone bottle is located at:
 4. Click **Save paths**, then **Re-detect** to check the configuration.
 5. Click **Start Steam**, sign in, and then click **Launch ETS2 MP**.
 
+Click **Open ETS2 Documents** to open the selected bottle’s `Documents/Euro Truck Simulator 2` folder in Finder, including its configuration, saves, and screenshots. Start ETS2 once first if the folder does not exist.
+
 ## Optional companion tools
 
 ### HaulLog
