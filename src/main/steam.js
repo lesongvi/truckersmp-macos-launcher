@@ -312,15 +312,40 @@ function registerSteamHandlers({ ipcMain, state, paths, wine, graphics, sendLog 
             WINEPREFIX: context.bottlePath,
             CX_BOTTLE: path.basename(context.bottlePath)
           }
-      // Ask Steam to exit; never kill other Wine bottles or an active game.
-      await new Promise((resolve, reject) => {
-        execFile(
-          context.winePath,
-          [path.join(context.steamDir, 'steam.exe'), '-shutdown'],
-          { env, timeout: 10000, killSignal: 'SIGKILL' },
-          (err) => (err ? reject(err) : resolve())
-        )
-      })
+      // Try a graceful exit before force-closing only Steam in this bottle.
+      try {
+        await new Promise((resolve, reject) => {
+          execFile(
+            context.winePath,
+            [path.join(context.steamDir, 'steam.exe'), '-shutdown'],
+            { env, timeout: 10000, killSignal: 'SIGKILL' },
+            (err) => (err ? reject(err) : resolve())
+          )
+        })
+      } catch (err) {
+        sendLog('info', `[Steam] Graceful shutdown failed: ${err.message}`)
+      }
+      for (let attempt = 0; attempt < 10; attempt++) {
+        if (!(await findSteamProcesses(context)).length) {
+          state.steamPid = null
+          state.steamPollActive = false
+          state.window?.webContents.send('steam:stopped')
+          return { ok: true }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      sendLog('info', '[Steam] Force-closing Steam in the selected bottle…')
+      for (const proc of await findSteamProcesses(context)) {
+        try {
+          await new Promise((resolve, reject) => {
+            execFile('/bin/kill', ['-KILL', String(proc.pid)], { timeout: 3000 }, (err) =>
+              err ? reject(err) : resolve()
+            )
+          })
+        } catch (err) {
+          if ((await findSteamProcesses(context)).some((p) => p.pid === proc.pid)) throw err
+        }
+      }
       for (let attempt = 0; attempt < 10; attempt++) {
         if (!(await findSteamProcesses(context)).length) {
           state.steamPid = null
@@ -332,7 +357,7 @@ function registerSteamHandlers({ ipcMain, state, paths, wine, graphics, sendLog 
       }
       return {
         ok: false,
-        error: 'Steam is still running. Close it from the Steam menu, then try again.'
+        error: 'Steam could not be stopped in the selected bottle. Check the log and try again.'
       }
     } catch (err) {
       return { ok: false, error: err.message }

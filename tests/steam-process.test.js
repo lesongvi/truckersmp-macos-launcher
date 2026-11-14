@@ -148,3 +148,34 @@ test('Steam UI ignores replies for a previously selected bottle', async () => {
   await pending
   assert.equal(f.state.steamRunning, false)
 })
+
+test('force-closes freshly detected Steam PIDs when graceful shutdown fails', async () => {
+  const calls = []
+  let queries = 0
+  let killed = false
+  const stop = handler('game:stopSteam', {
+    selectedWineContext: () => ({
+      standalone: true,
+      winePath: '/wine',
+      bottlePath: '/selected',
+      steamDir: '/selected/Steam'
+    }),
+    standaloneWineEnv: () => ({ WINEPREFIX: '/selected' }),
+    findSteamProcesses: async () => {
+      queries++
+      if (killed) return []
+      return [{ pid: queries === 1 ? 42 : 43 }]
+    },
+    execFile: (cmd, args, opts, done) => {
+      calls.push({ cmd, args: Array.from(args) })
+      if (cmd === '/wine') return done(new Error('shutdown timed out'))
+      killed = true
+      done(null)
+    }
+  })
+  assert.equal((await stop(null, {})).ok, true)
+  assert.deepEqual(calls, [
+    { cmd: '/wine', args: ['/selected/Steam/steam.exe', '-shutdown'] },
+    { cmd: '/bin/kill', args: ['-KILL', '43'] }
+  ])
+})
