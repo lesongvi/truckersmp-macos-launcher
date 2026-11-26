@@ -1,6 +1,6 @@
 {
   "name": "truckersmp-launcher",
-  "productName": "TruckersMP for macOS",
+  "productName": "Vi's TruckersMP for MacOS",
   "version": "2.0.0-beta",
   "description": "Compact macOS launcher for TruckersMP with standalone Wine or CrossOver",
   "author": "nohero765",
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.nohero.truckersmp-launcher",
-    "productName": "TruckersMP for macOS",
+    "productName": "Vi's TruckersMP for MacOS",
     "defaultArch": "arm64",
     "mac": {
       "category": "public.app-category.utilities",
@@ -41,7 +41,7 @@
       ]
     },
     "dmg": {
-      "title": "TruckersMP for macOS",
+      "title": "Vi's TruckersMP for MacOS",
       "background": null,
       "window": {
         "width": 540,

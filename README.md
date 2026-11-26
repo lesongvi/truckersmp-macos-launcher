@@ -1,4 +1,4 @@
-# TruckersMP for macOS
+# Vi's TruckersMP for MacOS
 
 An unofficial Electron launcher for playing Euro Truck Simulator 2 and American Truck Simulator multiplayer through [TruckersMP](https://truckersmp.com) on macOS. It uses [truckersmp-cli](https://github.com/truckersmp-cli/truckersmp-cli) to launch multiplayer and runs the Windows game through either standalone Wine or CrossOver.
 

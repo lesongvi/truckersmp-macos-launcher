@@ -78,7 +78,7 @@ function createApplication({ app, BrowserWindow, ipcMain, dialog, shell }, paths
       height: 650,
       minWidth: 400,
       minHeight: 560,
-      title: 'TruckersMP for macOS',
+      title: "Vi's TruckersMP for MacOS",
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 14, y: 18 },
       backgroundColor: '#101113',
@@ -97,7 +97,7 @@ function createApplication({ app, BrowserWindow, ipcMain, dialog, shell }, paths
 
   function start() {
     app.setPath('userData', paths.dataDir)
-    app.setName('TruckersMP for macOS')
+    app.setName("Vi's TruckersMP for MacOS")
     app.whenReady().then(createWindow)
     app.on('activate', () => {
       if (!state.window) createWindow()
